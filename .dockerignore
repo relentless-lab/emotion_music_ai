@@ -1,0 +1,19 @@
+**/.git
+**/.idea
+**/.vscode
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.log
+**/.DS_Store
+
+# local virtualenvs / node_modules
+backend/venv
+frontend/node_modules
+
+# local generated assets (big)
+backend/static/audio
+backend/uploads
+
+

@@ -1,0 +1,71 @@
+services:
+  db:
+    image: mysql:8.0
+    command: ["mysqld", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    environment:
+      # Required
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+
+      # Core
+      DEBUG: "false"
+      API_PREFIX: "/api"
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+
+      # SongGen (4090 service)
+      SONGGEN_REMOTE_URL: ${SONGGEN_REMOTE_URL}
+      SONGGEN_LLM_ENABLED: ${SONGGEN_LLM_ENABLED}
+
+      # LLM / Image (SiliconFlow)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_BASE: ${OPENAI_API_BASE}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      IMAGE_MODEL: ${IMAGE_MODEL}
+
+      # OSS (optional)
+      OSS_ENABLED: ${OSS_ENABLED}
+      OSS_ENDPOINT: ${OSS_ENDPOINT}
+      OSS_BUCKET: ${OSS_BUCKET}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
+      OSS_PUBLIC_BASE_URL: ${OSS_PUBLIC_BASE_URL}
+      DELETE_LOCAL_AUDIO_AFTER_OSS_UPLOAD: ${DELETE_LOCAL_AUDIO_AFTER_OSS_UPLOAD}
+    volumes:
+      - backend_static:/app/static
+      - backend_uploads:/app/uploads
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/aliyun/Dockerfile.nginx
+      args:
+        # IMPORTANT: this must be set to your public domain/IP (e.g. https://your-domain.com)
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  backend_static:
+  backend_uploads:
+
+
