@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     MEDIA_ROOT: str = str(BASE_DIR / "uploads")
 
     # LLM / OpenAI-compatible provider
-    OPENAI_API_KEY: str = "sk-najqvgaroljdypcsykkomfiodzfjrpvaaesypznwsguptzon"
+    # IMPORTANT: do NOT hardcode real API keys in code or git.
+    # Configure via environment variables / deploy secrets.
+    OPENAI_API_KEY: str = ""
     OPENAI_API_BASE: str = "https://api.siliconflow.cn/v1"  # 如用代理，填代理地址；不用可省略
     OPENAI_MODEL: str = "qwen/Qwen2.5-7B-Instruct"
     # 用于专辑封面生成的图片模型（Qwen-image）
@@ -81,8 +83,8 @@ class Settings(BaseSettings):
     MODEL_WEIGHTS_DIR: str = "model_weights"
 
     # Email configuration (QQ邮箱)
-    QQ_EMAIL: str | None = "2464869638@qq.com"  # QQ邮箱地址
-    QQ_EMAIL_AUTH_CODE: str | None = "vyzutqycverldjac"  # QQ邮箱授权码
+    QQ_EMAIL: str | None = None  # QQ邮箱地址（通过环境变量配置）
+    QQ_EMAIL_AUTH_CODE: str | None = None  # QQ邮箱授权码（通过环境变量配置）
 
     # Always load backend/.env regardless of current working directory.
     model_config = SettingsConfigDict(

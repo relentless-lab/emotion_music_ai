@@ -1,0 +1,38 @@
+# Secrets / env files
+.env
+.env.*
+backend/.env
+backend/.env.*
+deploy/aliyun/.env
+deploy/aliyun/.env.*
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs
+backend/venv/
+**/.venv/
+
+# Node
+frontend/node_modules/
+**/node_modules/
+frontend/dist/
+
+# Local generated files (large)
+backend/static/audio/
+backend/uploads/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+
