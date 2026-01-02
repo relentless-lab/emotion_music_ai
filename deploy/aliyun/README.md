@@ -57,8 +57,8 @@ This avoids pulling/running the `mysql:8.0` image.
 
 ```bash
 cd /opt/emotion_music_ai/deploy/aliyun
-docker-compose --env-file .env up -d --build --scale db=0
-docker-compose ps
+docker-compose -f docker-compose.rds.yml --env-file .env up -d --build
+docker-compose -f docker-compose.rds.yml ps
 ```
 
 ### 6) Open in browser
