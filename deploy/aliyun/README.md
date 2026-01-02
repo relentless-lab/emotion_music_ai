@@ -69,7 +69,13 @@ Backend docs:
 - `http://<YOUR_ECS_PUBLIC_IP>/api/docs`
 
 ### If Docker Hub pull times out (common)
-Configure registry mirrors and restart docker:
+Configure registry mirrors and restart docker. If it still times out, explicitly set base images to your Aliyun mirror in `.env`:
+
+```bash
+PY_BASE_IMAGE="nburv8wz.mirror.aliyuncs.com/library/python:3.11-slim"
+NODE_BASE_IMAGE="nburv8wz.mirror.aliyuncs.com/library/node:20-alpine"
+NGINX_BASE_IMAGE="nburv8wz.mirror.aliyuncs.com/library/nginx:1.25-alpine"
+```
 
 ```bash
 sudo mkdir -p /etc/docker
