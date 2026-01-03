@@ -85,6 +85,25 @@
             </div>
 
               <div class="input-actions">
+                <input
+                  ref="imitateFileInputRef"
+                  type="file"
+                  accept="audio/*"
+                  style="display:none"
+                  @change="onImitateFileChange"
+                />
+                <button
+                  class="duration-btn"
+                  type="button"
+                  :disabled="sending"
+                  @click="triggerImitatePick"
+                  title="音乐仿写（上传参考音频）"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                  </svg>
+                  <span class="duration-badge">仿写</span>
+                </button>
                 <button
                   class="duration-btn"
                   type="button"
@@ -204,7 +223,8 @@ import {
   getDialogueDetail, 
   generateCoverOnly,
   chatWithDialogueAsync,
-  getMusicTaskStatus
+  getMusicTaskStatus,
+  imitateMusicAsync
 } from "@/services/dialogueApi";
 import { createWork } from "@/services/workApi";
 import { usePlayerStore } from "@/stores/player";
@@ -229,6 +249,7 @@ const durationOptions = [30, 40, 60, 90, 120, 180, 300];
 const toastMessage = ref("");
 const toastType = ref("success");
 let toastTimer = null;
+const imitateFileInputRef = ref(null);
 
 const showToast = (message, type = "success", durationMs = 2200) => {
   toastMessage.value = message || "";
@@ -723,6 +744,90 @@ const sendMessage = async () => {
     const msgIdx = messages.value.findIndex(m => m.role === "assistant" && m.pendingTrackId === tempId);
     if (msgIdx !== -1) messages.value.splice(msgIdx, 1);
     sending.value = false;
+  } finally {
+    sending.value = false;
+  }
+};
+
+const triggerImitatePick = () => {
+  if (sending.value) return;
+  if (imitateFileInputRef.value) {
+    imitateFileInputRef.value.value = ""; // allow picking same file again
+    imitateFileInputRef.value.click();
+  }
+};
+
+const onImitateFileChange = async (e) => {
+  const file = e?.target?.files?.[0];
+  if (!file) return;
+  await sendImitate(file);
+};
+
+const sendImitate = async (file) => {
+  const text = (messageInput.value || "").trim(); // 可为空：纯仿写只靠参考音频
+  const now = new Date().toISOString();
+  const tempId = `temp-imitate-${Date.now()}`;
+
+  // 创建一个临时“生成中”条目
+  const pendingTrack = {
+    id: tempId,
+    title: text ? (text.substring(0, 20) + (text.length > 20 ? "..." : "")) : (file.name || "音乐仿写"),
+    mood: text || "音乐仿写",
+    prompt: text || "",
+    instrumental: isInstrumental.value,
+    lyrics: isInstrumental.value ? null : (lyricsInput.value || "").trim() || null,
+    status: 'generating',
+    createdAt: now,
+    startedAt: now,
+    cover: null,
+    duration: 0,
+    can_save: false
+  };
+  generatedTracks.value = [pendingTrack, ...generatedTracks.value];
+
+  sending.value = true;
+  error.value = "";
+
+  try {
+    // 封面先行（可选）
+    if (text) {
+      generateCoverOnly({ prompt: text })
+        .then(res => res?.cover_url)
+        .then(coverUrl => {
+          if (!coverUrl) return;
+          const track = generatedTracks.value.find(t => t.id === tempId);
+          if (track) track.cover = toAbsoluteUrl(coverUrl);
+        })
+        .catch(() => {});
+    }
+
+    const res = await imitateMusicAsync({
+      file,
+      prompt: text,
+      duration_seconds: duration.value,
+      instrumental: !!isInstrumental.value,
+      lyrics: isInstrumental.value ? null : (lyricsInput.value || "").trim() || null
+    });
+    const taskId = res.task_id;
+
+    const track = generatedTracks.value.find(t => t.id === tempId);
+    if (track) track.taskId = taskId;
+
+    pollTaskStatus(taskId, tempId);
+
+    // 添加一个临时 assistant 气泡
+    addMessage("assistant", "正在根据你的参考音频进行音乐仿写，请稍候...", {
+      order: nextOrder.value,
+      createdAt: now,
+      music: null,
+      pendingTrackId: tempId
+    });
+  } catch (err) {
+    error.value = err?.message || "仿写请求失败，请稍后重试";
+    const idx = generatedTracks.value.findIndex(t => t.id === tempId);
+    if (idx !== -1) generatedTracks.value.splice(idx, 1);
+    const msgIdx = messages.value.findIndex(m => m.role === "assistant" && m.pendingTrackId === tempId);
+    if (msgIdx !== -1) messages.value.splice(msgIdx, 1);
   } finally {
     sending.value = false;
   }

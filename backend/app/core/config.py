@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     # SongGeneration(full-new) 4090 推理服务地址（如 http://x.x.x.x:8000）
     # 配置后：对话生成将优先走 SongGen（替换 MusicGen）。
     SONGGEN_REMOTE_URL: str | None = None
+    # SongGeneration（with prompt audio）推理服务地址（建议跑在独立端口/独立模型，如 base-full:8001）
+    # 仅用于“音乐仿写”功能，避免影响现有 base-new 生成链路。
+    SONGGEN_PROMPT_AUDIO_REMOTE_URL: str | None = None
     SONGGEN_POLL_INTERVAL_SECONDS: float = 2.0
     SONGGEN_TOTAL_TIMEOUT_SECONDS: int = 15 * 60  # 主后端轮询总超时（秒）
     SONGGEN_REQUEST_TIMEOUT_SECONDS: int = 60     # 单次 HTTP 请求超时（秒）

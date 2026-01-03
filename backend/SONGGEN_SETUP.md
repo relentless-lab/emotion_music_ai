@@ -46,6 +46,14 @@ SONGGEN_POLL_INTERVAL_SECONDS=2
 SONGGEN_REQUEST_TIMEOUT_SECONDS=60
 ```
 
+如果你要启用“音乐仿写（with prompt audio）”，建议在 4090 上**用独立端口**再启动一个服务（例如 base-full:8001），然后在主后端增加：
+
+```bash
+SONGGEN_PROMPT_AUDIO_REMOTE_URL=http://workspace.featurize.cn:18857
+```
+
+> 这样“正常生成”（base-new/8000）与“仿写”（base-full/8001）互不影响。
+
 然后重启主后端 `uvicorn app.main:app ...`。
 
 > 注意：`SONGGEN_REMOTE_URL`（SongGen）与 `REMOTE_INFERENCE_URL`（旧 MusicGen）不是一个东西。
@@ -84,6 +92,12 @@ SONGGEN_ALLOW_NEGATIVE_TAGS=false
 - 选择 **有人声/歌曲**：可额外填“歌词”
   - 如果启用了 `SONGGEN_LLM_ENABLED=true`：不填歌词则由 LLM 自动生成歌词
   - 如果未启用：不填歌词则会回退到“用描述当歌词”（不推荐）
+
+新增：**音乐仿写**（上传参考音频）
+
+- 点击“仿写”按钮上传参考歌曲（模型只取前 10 秒作为 prompt audio，详见官方说明：[tencent-ailab/SongGeneration](https://github.com/tencent-ailab/SongGeneration)）
+- （可选）在输入框补充文字指令，例如：`伤心 钢琴 电影感`
+- 仿写结果默认不入库、不支持“加入作品”（避免污染作品库）；如需后续支持，可再扩展
 
 ### 4) 4090 侧排查：确认 JSONL 字段符合官方读取口径
 

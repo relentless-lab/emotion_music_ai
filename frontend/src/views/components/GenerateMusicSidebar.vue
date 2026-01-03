@@ -26,6 +26,7 @@
           :music="track"
           :is-playing="currentPlayingId === track.id"
           :is-generating="track.status === 'generating'"
+          :show-add-button="!((track.can_save === false) || (track.canSave === false))"
           :is-added="addedWorkIds.has(track.id || track.music_file_id)"
           :is-adding="addingWorkId === (track.id || track.music_file_id)"
           @play="handlePlay"

@@ -7,6 +7,7 @@
 封装为 HTTP API，并提供：
 
 - `POST /v1/generate`：创建任务（异步、并发限制 1）
+- `POST /v1/generate-with-audio`：创建“参考音频仿写”任务（上传 prompt audio）
 - `GET /v1/jobs/{job_id}`：查询任务状态
 - `GET /v1/jobs/{job_id}/audio`：下载音频（wav/flac）
 
@@ -37,6 +38,17 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 curl -X POST http://127.0.0.1:8000/v1/generate \
   -H "Content-Type: application/json" \
   -d '{"prompt":"一段忧伤的钢琴旋律","style":"piano, sad","duration_sec":30,"format":"wav","seed":123,"separate":false,"instrumental":true}'
+```
+
+参考音频仿写（with prompt audio）：
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/generate-with-audio \
+  -F "prompt_audio=@/path/to/ref.wav" \
+  -F "prompt=伤心 钢琴 电影感" \
+  -F "duration_sec=60" \
+  -F "format=wav" \
+  -F "instrumental=true"
 ```
 
 查询任务：

@@ -172,6 +172,8 @@ def _build_jsonl_line(
     instrumental: bool,
     vocal_only: bool,
     lyrics: Optional[str],
+    prompt_audio_path: Optional[str] = None,
+    auto_prompt_audio_type: Optional[str] = None,
 ) -> str:
     """
     写入单条 jsonl。
@@ -181,23 +183,34 @@ def _build_jsonl_line(
     style = (style or "").strip()
     lyrics = (lyrics or "").strip()
 
+    has_prompt_audio = bool((prompt_audio_path or "").strip()) or bool((auto_prompt_audio_type or "").strip())
+
     # ✅ 纯音乐兜底结构（避免 prompt 为空时效果/稳定性差）
-    if prompt:
-        # 给模型一个明确的“收尾”暗示，减少突兀结尾
-        description = prompt
-        if instrumental and ("[outro" not in description.lower()):
-            description = f"{description} ; {_pick_outro_tag(duration_sec)}"
+    # Prompt-audio 场景：尽量避免同时塞“过强的文字结构提示”，以免与参考音频冲突。
+    if has_prompt_audio:
+        description = (prompt or "").strip()
     else:
-        description = _default_instrumental_description(duration_sec)
+        if prompt:
+            # 给模型一个明确的“收尾”暗示，减少突兀结尾
+            description = prompt
+            if instrumental and ("[outro" not in description.lower()):
+                description = f"{description} ; {_pick_outro_tag(duration_sec)}"
+        else:
+            description = _default_instrumental_description(duration_sec)
 
     # ✅ 关键：某些版本 generate.py 强依赖 idx / gt_lyric，否则会 KeyError
     if instrumental:
         gt_lyric = ""
-        # 强制把“无歌词”信号写进 style/type_info
-        if style:
-            type_info = f"{style}, purely instrumental, no vocals, no singing, no lyrics"
+        # Prompt-audio 仿写场景：避免把“no vocals”等强约束写进 descriptions（可能与参考曲冲突）。
+        # 形态控制由 generate.sh flags（--bgm/--vocal/--separate）保证。
+        if has_prompt_audio:
+            type_info = style or ""
         else:
-            type_info = "purely instrumental, no vocals, no singing, no lyrics"
+            # 强制把“无歌词”信号写进 style/type_info
+            if style:
+                type_info = f"{style}, purely instrumental, no vocals, no singing, no lyrics"
+            else:
+                type_info = "purely instrumental, no vocals, no singing, no lyrics"
     elif vocal_only:
         # 纯人声：歌词仍然有意义（a cappella），也做结构化兜底
         raw = lyrics or prompt
@@ -227,6 +240,11 @@ def _build_jsonl_line(
             "type_info": type_info,
         },
     }
+
+    if (prompt_audio_path or "").strip():
+        payload["prompt_audio_path"] = str(prompt_audio_path)
+    if (auto_prompt_audio_type or "").strip():
+        payload["auto_prompt_audio_type"] = str(auto_prompt_audio_type)
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -280,6 +298,8 @@ async def run_songgen_job(
     instrumental: bool,
     vocal_only: bool,
     lyrics: Optional[str],
+    prompt_audio_path: Optional[str],
+    auto_prompt_audio_type: Optional[str],
     timeout_seconds: int,
 ) -> str:
     """
@@ -311,6 +331,8 @@ async def run_songgen_job(
         instrumental=instrumental,
         vocal_only=vocal_only,
         lyrics=lyrics,
+        prompt_audio_path=prompt_audio_path,
+        auto_prompt_audio_type=auto_prompt_audio_type,
     )
     input_jsonl.write_text(line + "\n", encoding="utf-8")
 

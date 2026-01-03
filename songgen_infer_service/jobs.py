@@ -69,6 +69,8 @@ class JobRegistry:
         instrumental: bool,
         vocal_only: bool,
         lyrics: Optional[str],
+        prompt_audio_path: Optional[str],
+        auto_prompt_audio_type: Optional[str],
     ) -> None:
         # fire-and-forget background coroutine
         asyncio.create_task(
@@ -83,6 +85,8 @@ class JobRegistry:
                 instrumental=instrumental,
                 vocal_only=vocal_only,
                 lyrics=lyrics,
+                prompt_audio_path=prompt_audio_path,
+                auto_prompt_audio_type=auto_prompt_audio_type,
             )
         )
 
@@ -99,6 +103,8 @@ class JobRegistry:
         instrumental: bool,
         vocal_only: bool,
         lyrics: Optional[str],
+        prompt_audio_path: Optional[str],
+        auto_prompt_audio_type: Optional[str],
     ) -> None:
         async with self._sem:
             job.status = JobStatus.running
@@ -115,6 +121,8 @@ class JobRegistry:
                     instrumental=instrumental,
                     vocal_only=vocal_only,
                     lyrics=lyrics,
+                    prompt_audio_path=prompt_audio_path,
+                    auto_prompt_audio_type=auto_prompt_audio_type,
                     timeout_seconds=int(settings.SONGGEN_TIMEOUT_SECONDS),
                 )
                 job.audio_path = audio_path

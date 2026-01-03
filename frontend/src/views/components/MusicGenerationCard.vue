@@ -38,7 +38,7 @@
     </div>
 
     <div class="card-right">
-      <div class="menu-container" v-if="!isGenerating" v-click-outside="closeMenu">
+      <div class="menu-container" v-if="!isGenerating && showAddButton" v-click-outside="closeMenu">
         <button class="more-btn" @click.stop="toggleMenu">
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
             <path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
@@ -87,6 +87,10 @@ const props = defineProps({
   isGenerating: {
     type: Boolean,
     default: false
+  },
+  showAddButton: {
+    type: Boolean,
+    default: true
   }
 });
 

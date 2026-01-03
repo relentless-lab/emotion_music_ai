@@ -107,10 +107,78 @@ class SongGenRemoteClient:
         resp.raise_for_status()
         return resp.content
 
+    def submit_with_prompt_audio(
+        self,
+        *,
+        prompt: str,
+        style: Optional[str],
+        duration_sec: int,
+        fmt: str,
+        seed: Optional[int],
+        separate: bool,
+        instrumental: bool,
+        vocal_only: bool = False,
+        lyrics: Optional[str],
+        prompt_audio_filename: str,
+        prompt_audio_bytes: bytes,
+        prompt_audio_content_type: Optional[str],
+        auto_prompt_audio_type: Optional[str],
+        timeout_seconds: int,
+    ) -> str:
+        """
+        Upload prompt audio (reference) via multipart/form-data.
+
+        4090-side endpoint: POST /v1/generate-with-audio
+        """
+        data: dict[str, str] = {
+            "prompt": prompt or "",
+            "duration_sec": str(int(duration_sec)),
+            "format": fmt,
+            "separate": "true" if bool(separate) else "false",
+            "instrumental": "true" if bool(instrumental) else "false",
+            "vocal_only": "true" if bool(vocal_only) else "false",
+        }
+        if style is not None:
+            data["style"] = str(style)
+        if seed is not None:
+            data["seed"] = str(int(seed))
+        if lyrics is not None:
+            data["lyrics"] = str(lyrics)
+        if auto_prompt_audio_type is not None:
+            data["auto_prompt_audio_type"] = str(auto_prompt_audio_type)
+
+        files = {
+            "prompt_audio": (
+                prompt_audio_filename or "prompt_audio.wav",
+                prompt_audio_bytes,
+                prompt_audio_content_type or "application/octet-stream",
+            )
+        }
+        resp = requests.post(
+            f"{self.base_url}/v1/generate-with-audio",
+            data=data,
+            files=files,
+            timeout=timeout_seconds,
+            proxies={"http": None, "https": None},
+        )
+        resp.raise_for_status()
+        payload = resp.json() or {}
+        job_id = payload.get("job_id")
+        if not job_id:
+            raise RuntimeError(f"songgen submit_with_prompt_audio: missing job_id (resp={payload})")
+        return str(job_id)
+
 
 def get_songgen_client() -> SongGenRemoteClient:
     if not settings.SONGGEN_REMOTE_URL:
         raise RuntimeError("SONGGEN_REMOTE_URL is not configured")
     return SongGenRemoteClient(settings.SONGGEN_REMOTE_URL)
+
+
+def get_songgen_prompt_audio_client() -> SongGenRemoteClient:
+    url = settings.SONGGEN_PROMPT_AUDIO_REMOTE_URL or settings.SONGGEN_REMOTE_URL
+    if not url:
+        raise RuntimeError("SONGGEN_PROMPT_AUDIO_REMOTE_URL (or SONGGEN_REMOTE_URL) is not configured")
+    return SongGenRemoteClient(url)
 
 

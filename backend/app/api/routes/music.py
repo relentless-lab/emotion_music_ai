@@ -2,7 +2,8 @@ from pathlib import Path
 from uuid import uuid4
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+import asyncio
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, BackgroundTasks, Form
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -25,6 +26,9 @@ from app.services.oss_storage import (
 )
 from app.services.url_resolver import resolve_music_url, resolve_cover_url
 from app.services.file_cleanup import delete_file_best_effort
+from app.db.session import SessionLocal
+from app.services.storage_service import save_audio_bytes
+from app.songgen.songgen_remote import get_songgen_prompt_audio_client
 
 router = APIRouter()
 
@@ -115,6 +119,175 @@ async def generate_music_file(
       prompt=payload.prompt,
       notes=f"model={gen_result.model_name}",
   )
+
+
+def _background_imitate_with_prompt_audio(
+    task_id: str,
+    *,
+    user_id: int,
+    prompt: str,
+    duration_sec: int,
+    instrumental: bool,
+    lyrics: str | None,
+    style: str | None,
+    prompt_audio_filename: str,
+    prompt_audio_bytes: bytes,
+    prompt_audio_content_type: str | None,
+) -> None:
+  """
+  后台仿写任务：
+  - 不写入 music_files（用户说“不需要像情绪识别一样需要保存”）
+  - 生成完成后返回一个可播放 URL（本地 static/audio 或 OSS URL）
+  """
+  db = SessionLocal()
+  try:
+    try:
+      tasks.set_status(db, task_id, TaskStatus.processing)
+    except Exception:
+      pass
+
+    client = get_songgen_prompt_audio_client()
+    job_id = client.submit_with_prompt_audio(
+        prompt=prompt or "",
+        style=style,
+        duration_sec=int(duration_sec),
+        fmt="wav",
+        seed=None,
+        separate=False,
+        instrumental=bool(instrumental),
+        vocal_only=False,
+        lyrics=lyrics,
+        prompt_audio_filename=prompt_audio_filename,
+        prompt_audio_bytes=prompt_audio_bytes,
+        prompt_audio_content_type=prompt_audio_content_type,
+        auto_prompt_audio_type=None,
+        timeout_seconds=int(settings.SONGGEN_REQUEST_TIMEOUT_SECONDS),
+    )
+
+    result = client.poll_until_done(
+        job_id,
+        timeout_seconds=int(settings.SONGGEN_TOTAL_TIMEOUT_SECONDS),
+        poll_interval_seconds=float(settings.SONGGEN_POLL_INTERVAL_SECONDS),
+    )
+    if result.status != "succeeded":
+      raise RuntimeError(result.error or f"songgen failed (job_id={job_id})")
+
+    audio_bytes = client.download_audio(job_id, timeout_seconds=int(settings.SONGGEN_REQUEST_TIMEOUT_SECONDS))
+    filename = save_audio_bytes(audio_bytes, prefix="songgen_imitate", ext="wav")
+    rel_path = f"static/audio/{filename}"
+
+    stored_path = rel_path
+    if settings.OSS_ENABLED:
+      try:
+        key = build_oss_key(
+            category="music",
+            source="imitated",
+            user_id=user_id,
+            original_filename=filename,
+            ext=".wav",
+        )
+        audio_abs = Path(rel_path)
+        if not audio_abs.is_absolute():
+          audio_abs = Path.cwd() / audio_abs
+        OSSStorage().put_file(key, str(audio_abs), content_type="audio/wav")
+        stored_path = encode_oss_path(key)
+        if getattr(settings, "DELETE_LOCAL_AUDIO_AFTER_OSS_UPLOAD", False):
+          delete_file_best_effort(audio_abs)
+      except Exception as exc:
+        print(f"[music/imitate-task] Upload to OSS failed, keep local path: {exc}")
+
+    audio_url = resolve_storage_path_to_url(stored_path) or f"/{rel_path}"
+
+    # best-effort title
+    try:
+      title = asyncio.run(llm_service.build_music_title(prompt or "音乐仿写"))
+    except Exception:
+      title = (prompt or "").strip()[:12] or "音乐仿写"
+
+    tasks.complete_task(
+        db,
+        task_id,
+        result={
+            "id": f"imitate-{task_id}",
+            "music_file_id": None,
+            "title": title,
+            "artist": "AI Imitator",
+            "url": audio_url,
+            "duration": int(duration_sec),
+            "cover": None,
+            "reply": "音乐仿写已完成，请试听。",
+            "can_save": False,
+        },
+    )
+  except Exception as exc:
+    try:
+      tasks.fail_task(db, task_id, str(exc))
+    except Exception:
+      pass
+  finally:
+    db.close()
+
+
+@router.post(
+    "/imitate-task",
+    response_model=TaskCreateResponse,
+    summary="音乐仿写（with prompt audio）：上传参考音频并异步生成",
+)
+async def imitate_music_task(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="参考音频文件（只取前 10 秒）"),
+    prompt: str = Form("", description="可选：附加文字指令（如 伤心 钢琴 电影感）"),
+    duration_seconds: int = Form(60, ge=1, le=600),
+    instrumental: bool = Form(True),
+    lyrics: str | None = Form(None),
+    style: str | None = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskCreateResponse:
+  # 读取文件到内存（prompt audio 通常较小；如需更大文件支持可改为落盘临时文件再转发）
+  try:
+    prompt_audio_bytes = await file.read()
+  except Exception as exc:
+    raise HTTPException(status_code=400, detail=f"读取上传文件失败: {exc}") from exc
+
+  # Create async task record (reuse TaskType.generate_music to avoid DB enum migration)
+  record = tasks.create_task(
+      db,
+      user_id=current_user.id,
+      task_type=TaskType.generate_music,
+      input_payload={
+          "mode": "imitate",
+          "prompt": prompt,
+          "duration_seconds": int(duration_seconds),
+          "instrumental": bool(instrumental),
+          "lyrics": lyrics,
+          "style": style,
+          "ref_filename": file.filename,
+          "ref_content_type": file.content_type,
+          "ref_size": len(prompt_audio_bytes),
+      },
+      auto_complete=False,
+  )
+  try:
+    tasks.set_status(db, record.id, TaskStatus.processing)
+  except Exception:
+    pass
+
+  background_tasks.add_task(
+      _background_imitate_with_prompt_audio,
+      record.id,
+      user_id=current_user.id,
+      prompt=prompt,
+      duration_sec=int(duration_seconds),
+      instrumental=bool(instrumental),
+      lyrics=(lyrics or "").strip() or None,
+      style=(style or "").strip() or None,
+      prompt_audio_filename=file.filename or "prompt_audio.wav",
+      prompt_audio_bytes=prompt_audio_bytes,
+      prompt_audio_content_type=file.content_type,
+  )
+
+  return TaskCreateResponse(task_id=record.id, status=record.status)
 
 
 @router.post(
