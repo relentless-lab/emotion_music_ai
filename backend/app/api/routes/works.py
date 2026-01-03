@@ -1,7 +1,8 @@
 from pathlib import Path
 from uuid import uuid4
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, status
+from fastapi import APIRouter, Body, Depends, HTTPException, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -10,7 +11,10 @@ from app.models.like_record import LikeRecord
 from app.models.music_file import MusicFile
 from app.models.user import User
 from app.models.work import Work, WorkStatus, WorkVisibility
+from app.models.work_play_log import WorkPlayLog
+from app.schemas.social import SimpleMessage
 from app.schemas.work import WorkAuthor, WorkCreateRequest, WorkPublicResponse, WorkResponse, WorkUpdateRequest
+from app.schemas.work import WorkPlayRequest
 from app.services.oss_storage import (
     OSSStorage,
     build_oss_key,
@@ -336,6 +340,52 @@ async def get_public_work(
 
   music_file = db.query(MusicFile).filter(MusicFile.id == work.music_file_id).first()
   return _to_public_work(work, music_file, liked=liked)
+
+
+@router.post(
+    "/{work_id}/play",
+    response_model=SimpleMessage,
+    summary="Record a play for a public work (no auth required)",
+)
+async def record_work_play(
+    work_id: int,
+    payload: WorkPlayRequest | None = Body(default=None),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> SimpleMessage:
+  """
+  Write a play log (for trending window queries) and increment `works.play_count`.
+
+  This endpoint is anonymous-friendly so public pages can track plays without forcing a login.
+  """
+  work = db.query(Work).filter(Work.id == work_id).first()
+  if not work or not _is_public_published(work):
+    raise HTTPException(status_code=404, detail="作品不存在或未公开")
+
+  source = (payload.source if payload else None) or None
+  if source and len(source) > 50:
+    source = source[:50]
+
+  db.add(
+      WorkPlayLog(
+          user_id=current_user.id if current_user else None,
+          work_id=work_id,
+          played_at=datetime.utcnow(),
+          source=source,
+      )
+  )
+
+  work.play_count = (work.play_count or 0) + 1
+  db.add(work)
+
+  # Update author's aggregate counters (best-effort)
+  author = work.user
+  if author:
+    author.plays_received = (author.plays_received or 0) + 1
+    db.add(author)
+
+  db.commit()
+  return SimpleMessage(message="ok")
 
 
 @router.get(

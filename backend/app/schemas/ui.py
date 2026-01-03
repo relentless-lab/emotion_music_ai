@@ -21,3 +21,22 @@ class ClientConfig(BaseModel):
     emotion_models: List[ModelOption]
     upload_policy: UploadPolicy
     features: List[str] = Field(default_factory=list)
+
+
+class HotSongItem(BaseModel):
+    id: int
+    title: str
+    cover_url: Optional[str] = None
+    audio_url: Optional[str] = None
+    like_count: int = 0
+    play_count: int = 0
+    tags: Optional[str] = None
+    mood: Optional[str] = None
+
+
+class RecommendedCreatorItem(BaseModel):
+    id: int
+    name: str
+    followers: str
+    handle: str
+    avatar: Optional[str] = None

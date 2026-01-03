@@ -57,3 +57,7 @@ class WorkAuthor(BaseModel):
 class WorkPublicResponse(WorkResponse):
   author: WorkAuthor
   liked: bool = False
+
+
+class WorkPlayRequest(BaseModel):
+  source: Optional[str] = Field(None, description="播放来源（用于统计，最长 50 字符）")

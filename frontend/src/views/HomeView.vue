@@ -133,6 +133,8 @@
             v-for="song in songs.slice(0, 9)" 
             :key="song.id" 
             :song="song" 
+            @play="playHotSong"
+            @card-click="gotoSongDetail"
           />
         </div>
         <div class="expand-section">
@@ -178,10 +180,13 @@ import { useAuthStore } from "../stores/auth";
 import { useUiStore } from "../stores/ui";
 import { sendVerificationCode } from "../services/authApi";
 import SearchHeader from "@/components/SearchHeader.vue";
+import { fetchHotSongs, fetchRecommendedCreators } from "@/services/uiApi";
+import { usePlayerStore } from "@/stores/player";
 
 const auth = useAuthStore();
 const ui = useUiStore();
 const router = useRouter();
+const player = usePlayerStore();
 
 const loginForm = reactive({
   username: "",
@@ -335,6 +340,71 @@ const gotoSearch = () => {
 
 onMounted(() => {
   auth.refreshProfile();
+});
+
+const playableHotSongs = computed(() => (songs.value || []).filter(s => (s?.url || "").trim()));
+
+const playHotSong = song => {
+  if (!song) return;
+  const list = playableHotSongs.value;
+  const idx = list.findIndex(item => item.id === song.id);
+  if (idx < 0) return;
+  player.setPlaylist(list, idx);
+  player.playTrack(idx);
+};
+
+const gotoSongDetail = song => {
+  const id = song?.id;
+  if (!id) return;
+  router.push({ name: "songDetail", params: { id } });
+};
+
+const loadHotSongs = async () => {
+  try {
+    const res = await fetchHotSongs({ limit: 9, window_days: 3 });
+    if (Array.isArray(res) && res.length) {
+      songs.value = res.map(item => ({
+        id: item.id,
+        title: item.title,
+        cover_url: item.cover_url || "",
+        coverImage: item.cover_url || "",
+        play_count: item.play_count ?? 0,
+        playCount: item.play_count ?? 0,
+        like_count: item.like_count ?? 0,
+        audio_url: item.audio_url || "",
+        url: item.audio_url || "",
+        tags: item.tags || "",
+        mood: item.mood || "",
+        // 用于 player 上报过滤
+        status: "published",
+        visibility: "public"
+      }));
+    }
+  } catch {
+    // ignore
+  }
+};
+
+const loadRecommendedCreators = async () => {
+  try {
+    const res = await fetchRecommendedCreators({ limit: 9 });
+    if (Array.isArray(res) && res.length) {
+      creators.value = res.map(item => ({
+        id: item.id,
+        name: item.name,
+        followers: item.followers,
+        handle: item.handle,
+        avatar: item.avatar || ""
+      }));
+    }
+  } catch {
+    // ignore
+  }
+};
+
+onMounted(() => {
+  loadHotSongs();
+  loadRecommendedCreators();
 });
 
 onBeforeUnmount(() => {

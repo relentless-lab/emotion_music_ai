@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { recordWorkPlay } from "../services/workApi";
 
 const VOLUME_KEY = "player_volume";
 const MUTED_KEY = "player_muted";
@@ -46,7 +47,9 @@ export const usePlayerStore = defineStore("player", {
     volume: parseFloat(localStorage.getItem(VOLUME_KEY) || "0.8"),
     currentTime: 0,
     duration: 0,
-    likedTrackIds: []
+    likedTrackIds: [],
+    // 防止暂停/继续或重复点击导致多次上报
+    _lastPlayReportAtByWorkId: {}
   }),
   getters: {
     currentTrack(state) {
@@ -109,6 +112,7 @@ export const usePlayerStore = defineStore("player", {
     async playTrack(index = this.currentIndex) {
       if (!this.playlist.length) return;
       if (!this.audio) this.initAudio();
+      const prevIndex = this.currentIndex;
       const normalized = ((index % this.playlist.length) + this.playlist.length) % this.playlist.length;
       if (normalized !== this.currentIndex || this.audio.src !== this.currentTrack?.url) {
         this.currentIndex = normalized;
@@ -121,9 +125,37 @@ export const usePlayerStore = defineStore("player", {
       try {
         await this.audio.play();
         this.isPlaying = true;
+        this._reportPlayIfNeeded(this.currentTrack, prevIndex !== this.currentIndex);
       } catch (err) {
         console.error("播放失败", err);
         this.isPlaying = false;
+      }
+    },
+    _reportPlayIfNeeded(track, changedTrack = false) {
+      try {
+        if (!track) return;
+        const id = track.id;
+        if (!id) return;
+        // 仅统计“公开发布作品”的播放；生成中 track / 未发布作品不计入榜单
+        if (track.status !== "published") return;
+        if (track.visibility && track.visibility !== "public") return;
+        if (!(track.url || track.audio_url || track.audioUrl)) return;
+
+        const now = Date.now();
+        const lastAt = this._lastPlayReportAtByWorkId?.[id] || 0;
+        // 去抖：同一作品 30s 内只上报一次（防止暂停/继续、重复点击）
+        if (!changedTrack && now - lastAt < 30 * 1000) return;
+        if (now - lastAt < 30 * 1000) return;
+
+        this._lastPlayReportAtByWorkId = {
+          ...(this._lastPlayReportAtByWorkId || {}),
+          [id]: now
+        };
+
+        // best-effort：不上报成功与否不影响播放
+        recordWorkPlay(id, { source: "player" }).catch(() => {});
+      } catch {
+        // ignore
       }
     },
     async togglePlay() {

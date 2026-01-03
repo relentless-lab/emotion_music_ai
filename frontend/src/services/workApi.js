@@ -26,3 +26,6 @@ export const uploadWorkCover = file => {
   form.append("file", file);
   return api.post("/api/works/upload-cover", form);
 };
+
+// 播放埋点：匿名可用，用于热门榜单（近N天播放量）
+export const recordWorkPlay = (id, payload = {}) => api.post(`/api/works/${id}/play`, payload);
