@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.dependencies import get_current_user_optional, get_db
 from app.models import LikeRecord, User, UserFollower
 from app.models.work import Work, WorkStatus, WorkVisibility
 from app.schemas.search import SearchResponse, SongSearchResult, UserSearchResult
-from app.services.url_resolver import resolve_cover_url
+from app.services.url_resolver import resolve_cover_url, resolve_music_url
 
 router = APIRouter()
 
@@ -37,6 +37,7 @@ async def search(
   if type in {"all", "song", "songs"}:
     works_query = (
         db.query(Work)
+        .options(joinedload(Work.user), joinedload(Work.music_file))
         .filter(
             Work.status == WorkStatus.published,
             Work.visibility == WorkVisibility.public,
@@ -70,6 +71,7 @@ async def search(
               id=w.id,
               title=w.title,
               cover_url=resolve_cover_url(w.cover_url),
+              audio_url=resolve_music_url(w.music_file),
               like_count=w.like_count,
               play_count=w.play_count,
               tags=w.tags,

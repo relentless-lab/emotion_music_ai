@@ -270,9 +270,10 @@ const submitPublish = async () => {
 }
 
 .list-card {
-  padding: 0;
-  background: transparent;
-  border: none;
+  padding: 6px 6px 12px;
+  border-radius: 12px;
+  background: #0b1627;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .work-list {

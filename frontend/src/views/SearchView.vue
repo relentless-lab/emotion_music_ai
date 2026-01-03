@@ -30,7 +30,17 @@
               @mouseenter="hoverId = song.id"
               @mouseleave="hoverId = null"
             >
-              <div class="cover" :style="coverStyle(song.cover_url)">
+              <div
+                class="cover"
+                :class="{ disabled: !song.url }"
+                :style="coverStyle(song.cover_url)"
+                role="button"
+                tabindex="0"
+                :title="song.url ? '点击播放' : '暂无可播放地址'"
+                @click.stop="song.url && playSong(song)"
+                @keydown.enter.stop.prevent="song.url && playSong(song)"
+                @keydown.space.stop.prevent="song.url && playSong(song)"
+              >
                 <span class="play-count">▶ {{ song.play_count || 0 }}</span>
               </div>
               <div class="song-info">
@@ -98,19 +108,23 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useUiStore } from "@/stores/ui";
+import { usePlayerStore } from "@/stores/player";
 import { followUser, likeWork, searchAll, unfollowUser, unlikeWork } from "@/services/searchApi";
 import SearchHeader from "@/components/SearchHeader.vue";
 
 const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL || "").trim()
-  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")).replace(/\/+$/, "");
+  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin))
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 const ui = useUiStore();
+const player = usePlayerStore();
 
 const tabs = [
   { label: "综合", value: "all" },
@@ -167,6 +181,23 @@ const applyQueryFromRoute = () => {
   activeTab.value = ["all", "song", "user"].includes(tab) ? tab : "all";
 };
 
+function normalizeSong(item) {
+  const coverUrl = item?.cover_url || item?.coverUrl || "";
+  const audioUrl = item?.audio_url || item?.audioUrl || item?.url || "";
+  return {
+    ...item,
+    // 统一字段
+    cover_url: coverUrl,
+    // player store 读取的是 url/cover/title/artist
+    url: toAbsoluteUrl(audioUrl),
+    cover: toAbsoluteUrl(coverUrl),
+    artist: item?.author_name || item?.authorName || "AI Composer",
+    play_count: item?.play_count ?? item?.playCount ?? 0,
+    like_count: item?.like_count ?? item?.likeCount ?? 0,
+    liked: item?.liked ?? item?.is_liked ?? item?.isLiked ?? false,
+  };
+}
+
 const triggerSearch = async () => {
   const q = keyword.value.trim();
   if (!q) return;
@@ -177,10 +208,7 @@ const triggerSearch = async () => {
       query: q,
       type: activeTab.value
     });
-    songs.value = (res?.songs || []).map(item => ({
-      ...item,
-      cover_url: item.cover_url || item.coverUrl || ""
-    }));
+    songs.value = (res?.songs || []).map(item => normalizeSong(item));
     users.value = res?.users || [];
     router.replace({ path: "/search", query: { q, type: activeTab.value } });
   } catch (err) {
@@ -188,6 +216,17 @@ const triggerSearch = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const playableSongs = computed(() => (songs.value || []).filter(s => (s?.url || "").trim()));
+
+const playSong = song => {
+  if (!song) return;
+  const list = playableSongs.value;
+  const idx = list.findIndex(item => item.id === song.id);
+  if (idx < 0) return;
+  player.setPlaylist(list, idx);
+  player.playTrack(idx);
 };
 
 const ensureLogin = () => {
@@ -362,6 +401,17 @@ onMounted(() => {
   overflow: hidden;
   background-size: cover;
   background-position: center;
+  cursor: pointer;
+  outline: none;
+}
+
+.cover.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.cover:focus-visible {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.65);
 }
 
 .play-count {

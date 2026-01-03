@@ -224,7 +224,10 @@ const auth = useAuthStore();
 const player = usePlayerStore();
 const router = useRouter();
 const isLoggedIn = computed(() => auth.isLoggedIn);
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL || "").trim()
+  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin))
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
 
 const isEditing = ref(false);
 const saving = ref(false);

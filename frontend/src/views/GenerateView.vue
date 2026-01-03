@@ -587,8 +587,10 @@ const toAbsoluteUrl = url => {
   // Keep consistent with `src/services/api.js` default in dev.
   const rawBase = (
     (import.meta.env.VITE_API_BASE_URL || "").trim() ||
-    (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")
-  ).replace(/\/+$/, "");
+    (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin)
+  )
+    .replace(/\/+$/, "")
+    .replace(/\/api$/, "");
 
   if (url.startsWith("/static")) {
     const fileBase = rawBase.replace(/\/api$/, "");

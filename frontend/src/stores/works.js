@@ -2,7 +2,10 @@ import { defineStore } from "pinia";
 import { fetchWorks, createWork, updateWork, deleteWork } from "@/services/workApi";
 import { useAuthStore } from "./auth";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL || "").trim()
+  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : (typeof window !== "undefined" ? window.location.origin : "")))
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
 
 const toAbsoluteUrl = url => {
   if (!url) return "";

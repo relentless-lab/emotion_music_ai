@@ -100,7 +100,10 @@ const router = useRouter();
 const auth = useAuthStore();
 const ui = useUiStore();
 const player = usePlayerStore();
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL || "").trim()
+  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin))
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
 
 const profile = ref(null);
 const loading = ref(false);

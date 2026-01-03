@@ -25,7 +25,7 @@ def create_app() -> FastAPI:
     # Allow frontend (e.g., localhost:3000/5173) to call APIs during development.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_origins=settings.allowed_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -35,7 +35,9 @@ nano deploy/aliyun/.env
 ```
 
 Important fields:
-- `VITE_API_BASE_URL`: `http://<YOUR_ECS_PUBLIC_IP>` or `https://<YOUR_DOMAIN>`
+- `VITE_API_BASE_URL` (optional):
+  - Recommended (same-origin): leave it empty, and let Nginx reverse-proxy `/api` to the backend.
+  - If you must use a dedicated API domain: set it to `http://<YOUR_ECS_PUBLIC_IP>` or `https://<YOUR_DOMAIN>` (**do NOT include** `/api`).
 - `DATABASE_URL`:
   - If using compose MySQL: keep `@db:3306`
   - If using **Aliyun RDS**: set `@rm-xxx.rds.aliyuncs.com:3306/...` (recommend adding `?charset=utf8mb4`)

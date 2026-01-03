@@ -1,6 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
 
+import json
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,7 +16,14 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
     DEBUG: bool = True
     ENVIRONMENT: str = "local"
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # NOTE:
+    # - In pydantic-settings v2, complex env values (like list[str]) are decoded as JSON by default.
+    # - For ease of deployment, we accept BOTH:
+    #   1) Comma-separated string: "http://a.com,http://b.com"
+    #   2) JSON array string: '["http://a.com","http://b.com"]'
+    #
+    # We store it as a plain string to avoid startup failures when operators use comma-separated values.
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     DATABASE_URL: str | None = None
 
     # JWT
@@ -90,13 +99,36 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=[str(BASE_DIR / ".env"), ".env"],
         case_sensitive=False,
+        # Deployment may add extra environment keys (e.g., HF_ENDPOINT/HF_HOME).
+        # Do not fail startup on unknown keys from dotenv.
+        extra="ignore",
     )
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     def split_origins(cls, v):  # noqa: N805
-        if isinstance(v, str):
-            return [item.strip() for item in v.split(",") if item.strip()]
+        # Keep backward compatibility if some runtime passes a list already.
+        if isinstance(v, list):
+            return ",".join(str(item).strip() for item in v if str(item).strip())
         return v
+
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        raw = (self.ALLOWED_ORIGINS or "").strip()
+        if not raw:
+            return []
+
+        # JSON array
+        if raw.startswith("["):
+            try:
+                data = json.loads(raw)
+                if isinstance(data, list):
+                    return [str(item).strip() for item in data if str(item).strip()]
+            except Exception:
+                # Fall back to comma-split below
+                pass
+
+        # Comma-separated
+        return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 @lru_cache
