@@ -29,6 +29,9 @@ frontend/dist/
 backend/static/audio/
 backend/uploads/
 
+# Local patch artifacts (do not commit)
+*.patch
+
 # OS / IDE
 .DS_Store
 Thumbs.db
