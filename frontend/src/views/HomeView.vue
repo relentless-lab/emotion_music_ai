@@ -198,6 +198,7 @@
             v-for="song in songs.slice(0, 8)" 
             :key="song.id" 
             :song="song" 
+            :cover="song.cover"
             @play="playHotSong"
             @card-click="gotoSongDetail"
           />
@@ -239,25 +240,12 @@ import { fetchHotSongs, fetchRecommendedCreators } from "@/services/uiApi";
 import { usePlayerStore } from "@/stores/player";
 import { followUser, unfollowUser } from "@/services/searchApi";
 
+import { toAbsoluteUrl } from "@/utils/url";
+
 const auth = useAuthStore();
 const ui = useUiStore();
 const router = useRouter();
 const player = usePlayerStore();
-
-// Convert backend-returned relative URLs (/static, /media, /uploads) to absolute URLs
-// so HomeView works in dev / when VITE_API_BASE_URL is set (frontend-backend not same-origin).
-const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL || "").trim()
-  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin))
-  .replace(/\/+$/, "")
-  .replace(/\/api$/, "");
-
-const toAbsoluteUrl = url => {
-  if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("data:") || url.startsWith("blob:")) return url;
-  const base = API_BASE_URL || window.location.origin;
-  const fileBase = base.replace(/\/api$/, "");
-  return url.startsWith("/") ? `${fileBase}${url}` : `${fileBase}/${url}`;
-};
 
 const loginForm = reactive({
   username: "",
@@ -496,28 +484,22 @@ const loadHotSongs = async () => {
     const res = await fetchHotSongs({ limit: 8, window_days: 3 });
     if (Array.isArray(res) && res.length) {
       songs.value = res.map(item => ({
-        id: item.id,
-        title: item.title,
+        ...item,
         authorName: item.author_name || "AI Composer",
-        // StickyPlayer 读取 currentTrack.cover / currentTrack.artist
         artist: item.author_name || "AI Composer",
-        cover_url: item.cover_url || "",
-        coverImage: toAbsoluteUrl(item.cover_url || ""),
+        // 关键：在这里完成 URL 绝对化，并同时赋值给多个可能的字段名以保证兼容性
         cover: toAbsoluteUrl(item.cover_url || ""),
-        play_count: item.play_count ?? 0,
-        playCount: item.play_count ?? 0,
-        like_count: item.like_count ?? 0,
-        audio_url: item.audio_url || "",
+        coverImage: toAbsoluteUrl(item.cover_url || ""),
         url: toAbsoluteUrl(item.audio_url || ""),
-        tags: item.tags || "",
-        mood: item.mood || "",
+        audio_url: item.audio_url || "",
+        playCount: item.play_count ?? 0,
         // 用于 player 上报过滤
         status: "published",
         visibility: "public"
       }));
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    console.error("加载热门歌曲失败:", err);
   }
 };
 

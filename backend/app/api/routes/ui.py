@@ -139,6 +139,7 @@ async def get_hot_songs(
                 id=w.id,
                 title=w.title,
                 author_name=w.user.username if w.user else "AI Composer",
+                # 恢复使用 resolve_cover_url 以支持 OSS 解析，前端再做绝对化处理
                 cover_url=resolve_cover_url(w.cover_url),
                 audio_url=audio_url,
                 like_count=int(w.like_count or 0),

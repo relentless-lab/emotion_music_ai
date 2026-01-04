@@ -250,6 +250,7 @@ import { computed, reactive, ref, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { fetchWorks, updateWork, uploadWorkCover } from "@/services/workApi";
+import { toAbsoluteUrl } from "@/utils/url";
 import { usePlayerStore } from "@/stores/player";
 import { fetchFollowers, fetchFollowing, fetchLikedWorks } from "@/services/searchApi";
 import SongImageCard from "@/views/components/SongImageCard.vue";
@@ -259,10 +260,7 @@ const auth = useAuthStore();
 const player = usePlayerStore();
 const router = useRouter();
 const isLoggedIn = computed(() => auth.isLoggedIn);
-const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL || "").trim()
-  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin))
-  .replace(/\/+$/, "")
-  .replace(/\/api$/, "");
+const auth = useAuthStore();
 
 const isEditing = ref(false);
 const saving = ref(false);
@@ -333,13 +331,6 @@ const resetForm = () => {
   form.bio = "";
   form.tags = [];
   tagInput.value = "";
-};
-
-const toAbsoluteUrl = url => {
-  if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
-  const base = API_BASE_URL || window.location.origin;
-  return url.startsWith("/") ? `${base}${url}` : `${base}/${url}`;
 };
 
 const currentAvatarUrl = computed(() => toAbsoluteUrl(auth.user?.avatar || ""));

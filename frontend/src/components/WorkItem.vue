@@ -62,6 +62,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { toAbsoluteUrl } from "@/utils/url";
 
 const props = defineProps({
   item: {
@@ -77,13 +78,6 @@ const props = defineProps({
 defineEmits(["delete", "play", "publish", "edit", "download"]);
 
 const displayIcon = computed(() => props.item?.icon || "🎵");
-
-const toAbsoluteUrl = (url) => {
-  if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
-  const base = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-  return url.startsWith("/") ? `${base.replace(/\/api$/, "")}${url}` : `${base.replace(/\/api$/, "")}/${url}`;
-};
 
 const coverUrl = computed(() => {
   const cover = props.item?.cover_url || props.item?.cover;
