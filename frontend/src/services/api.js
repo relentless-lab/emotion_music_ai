@@ -43,6 +43,13 @@ async function request(path, options = {}) {
     } catch {
       // ignore JSON parse errors, fall back to raw text
     }
+    // 统一 401 未登录提示文案，提升用户体验
+    if (res.status === 401) {
+      const m = (message || "").toString();
+      if (m.includes("缺少访问令牌") || m.includes("Not authenticated")) {
+        message = "请先进行注册/登录";
+      }
+    }
     if (!message) {
       message = `HTTP ${res.status}`;
     }

@@ -29,7 +29,7 @@ def get_current_user(
     authorization: str | None = Header(default=None),
 ) -> User:
   if not authorization or not authorization.lower().startswith("bearer "):
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="缺少访问令牌")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先进行注册/登录")
 
   token = authorization.split(" ", 1)[1]
   try:

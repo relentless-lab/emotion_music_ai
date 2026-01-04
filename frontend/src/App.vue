@@ -9,6 +9,8 @@
       <component v-else :is="Component" />
     </component>
   </RouterView>
+
+  <AuthModal />
 </template>
 
 <script setup>
@@ -16,5 +18,6 @@ import { RouterView } from "vue-router";
 import { KeepAlive } from "vue";
 import DefaultLayout from "./layouts/DefaultLayout.vue";
 import BlankLayout from "./layouts/BlankLayout.vue";
+import AuthModal from "./components/AuthModal.vue";
 </script>
 

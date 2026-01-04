@@ -4,6 +4,7 @@
 
     <section class="list-card">
       <div v-if="loading" class="state">加载中...</div>
+      <div v-else-if="!auth.isLoggedIn" class="state">请先进行注册/登录</div>
       <div v-else-if="displayWorks.length === 0" class="state">暂无作品</div>
       <div v-else class="work-list">
         <WorkItem
@@ -70,24 +71,49 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import WorkItem from "@/components/WorkItem.vue";
 import { useWorksStore } from "@/stores/works";
 import { usePlayerStore } from "@/stores/player";
+import { useAuthStore } from "@/stores/auth";
 import { uploadWorkCover } from "@/services/workApi";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const worksStore = useWorksStore();
 const playerStore = usePlayerStore();
+const auth = useAuthStore();
 const { list: works, loading } = storeToRefs(worksStore);
 
 const displayWorks = computed(() => works.value || []);
 
+// 避免切换账号/退出登录后短暂闪现上一用户的作品列表
+worksStore.syncScope();
+
 onMounted(() => {
   worksStore.loadWorks();
 });
+
+watch(
+  () => auth.user?.id,
+  () => {
+    // 切换账号：立即清空旧数据并重新加载
+    worksStore.syncScope();
+    worksStore.loadWorks();
+    closeModal();
+  }
+);
+
+watch(
+  () => auth.isLoggedIn,
+  loggedIn => {
+    if (!loggedIn) {
+      worksStore.syncScope();
+      closeModal();
+    }
+  }
+);
 
 const handleDelete = async item => {
   if (!confirm(`确定要删除作品「${item.title || item.name || "未命名"}」吗？此操作不可恢复。`)) {

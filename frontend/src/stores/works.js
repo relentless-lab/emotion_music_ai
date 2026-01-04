@@ -35,19 +35,52 @@ const normalizeWork = work => {
 
 export const useWorksStore = defineStore("works", {
   state: () => ({
+    // 用于隔离不同登录用户 / 游客的数据，避免切换账号后看到上一位用户的作品列表
+    scopeKey: "guest", // "guest" | `user:${id}`
     list: [],
     loading: false,
     error: ""
   }),
   actions: {
+    getCurrentScopeKey() {
+      const auth = useAuthStore();
+      const id = auth.user?.id;
+      return id ? `user:${id}` : "guest";
+    },
+    syncScope() {
+      const next = this.getCurrentScopeKey();
+      if (this.scopeKey !== next) {
+        this.scopeKey = next;
+        this.list = [];
+        this.loading = false;
+        this.error = "";
+      }
+    },
+    reset() {
+      this.scopeKey = "guest";
+      this.list = [];
+      this.loading = false;
+      this.error = "";
+    },
     async loadWorks() {
       const auth = useAuthStore();
+      this.syncScope();
       this.loading = true;
       this.error = "";
       try {
+        // 未登录：不拉取作品，直接清空，避免残留上个用户的数据
+        if (!auth.token) {
+          this.list = [];
+          this.error = "请先进行注册/登录";
+          return [];
+        }
         const data = await fetchWorks({ userId: auth.user?.id });
         this.list = Array.isArray(data) ? data.map(normalizeWork) : [];
       } catch (err) {
+        // 401：通常是未登录或 token 失效，清空列表避免展示旧数据
+        if (err?.status === 401) {
+          this.list = [];
+        }
         this.error = err?.message || "加载失败";
         throw err;
       } finally {
@@ -55,17 +88,20 @@ export const useWorksStore = defineStore("works", {
       }
     },
     async addWork(payload) {
+      this.syncScope();
       const item = await createWork(payload);
       if (item) {
         this.list.unshift(normalizeWork(item));
       }
     },
     async editWork(id, payload) {
+      this.syncScope();
       const updated = await updateWork(id, payload);
       const normalized = normalizeWork(updated);
       this.list = this.list.map(w => (w.id === id ? normalized : w));
     },
     async removeWork(id) {
+      this.syncScope();
       await deleteWork(id);
       this.list = this.list.filter(w => w.id !== id);
     }
