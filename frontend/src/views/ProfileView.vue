@@ -260,7 +260,6 @@ const auth = useAuthStore();
 const player = usePlayerStore();
 const router = useRouter();
 const isLoggedIn = computed(() => auth.isLoggedIn);
-const auth = useAuthStore();
 
 const isEditing = ref(false);
 const saving = ref(false);
