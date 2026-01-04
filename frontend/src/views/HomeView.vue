@@ -382,8 +382,11 @@ const loadHotSongs = async () => {
         id: item.id,
         title: item.title,
         authorName: item.author_name || "AI Composer",
+        // StickyPlayer 读取 currentTrack.cover / currentTrack.artist
+        artist: item.author_name || "AI Composer",
         cover_url: item.cover_url || "",
         coverImage: toAbsoluteUrl(item.cover_url || ""),
+        cover: toAbsoluteUrl(item.cover_url || ""),
         play_count: item.play_count ?? 0,
         playCount: item.play_count ?? 0,
         like_count: item.like_count ?? 0,

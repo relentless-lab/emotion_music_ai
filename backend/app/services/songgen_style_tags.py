@@ -264,3 +264,132 @@ def merge_style_tags(*, base_style: str | None, extra_tags: list[str]) -> str:
     return ", ".join(tags)
 
 
+# -----------------------------
+# 6-dim descriptions normalizer
+# -----------------------------
+
+_GENDER_WORDS = {
+    "female": ["female", "woman", "girl", "女声", "女 vocal", "女vocal"],
+    "male": ["male", "man", "boy", "男声", "男 vocal", "男vocal"],
+}
+_TIMBRE_WORDS = {
+    "bright": ["bright", "明亮", "清亮", "通透"],
+    "dark": ["dark", "阴暗", "暗黑", "阴森"],
+    "soft": ["soft", "柔和", "轻柔", "温柔", "轻声"],
+    "warm": ["warm", "温暖", "暖", "治愈", "疗愈"],
+    "airy": ["airy", "空灵", "轻盈"],
+}
+_GENRE_WORDS = {
+    "pop": ["pop", "流行"],
+    "rock": ["rock", "摇滚"],
+    "jazz": ["jazz", "爵士"],
+    "r&b": ["r&b", "rb", "R&B"],
+    "edm": ["edm", "电音", "电子舞曲", "舞曲"],
+    "electronic": ["electronic", "电子乐", "电子"],
+    "hiphop": ["hiphop", "hip-hop", "说唱", "嘻哈", "rap"],
+    "classical": ["classical", "古典", "交响", "室内乐"],
+    "ambient": ["ambient", "氛围", "环境", "冥想"],
+    "cinematic": ["cinematic", "电影感", "配乐", "影视"],
+    "chinese": ["国风", "中国风", "古风"],
+    "lo-fi": ["lo-fi", "lofi", "低保真"],
+}
+_EMOTION_WORDS = {
+    "romantic": ["romantic", "浪漫", "甜蜜", "心动"],
+    "sad": ["sad", "悲伤", "伤感", "忧伤", "落寞"],
+    "calm": ["calm", "平静", "安静", "宁静", "舒缓", "放松"],
+    "happy": ["happy", "开心", "快乐", "阳光", "轻快"],
+    "energetic": ["energetic", "热血", "燃", "动感", "激昂", "强烈", "派对"],
+    "mysterious": ["mysterious", "神秘", "悬疑", "诡异"],
+    "epic": ["epic", "史诗", "恢弘", "宏大", "壮阔"],
+}
+
+
+def _first_match(text: str, mapping: dict[str, list[str]]) -> str | None:
+    s = text or ""
+    s_lower = s.lower()
+    for key, words in mapping.items():
+        for w in words:
+            if not w:
+                continue
+            # allow CN keywords and EN keywords
+            if w in s or w.lower() in s_lower:
+                return key
+    return None
+
+
+def normalize_songgen_descriptions(
+    *,
+    prompt_zh: str,
+    style: str | None,
+    instrumental: bool,
+) -> str:
+    """
+    Normalize descriptions/type_info into the recommended 6 stable dimensions:
+    Gender / Timbre / Genre / Emotion / Instrument / BPM
+
+    Output format: short English tags, comma-separated, 1-2 tokens per dimension.
+    This is best-effort and intentionally conservative to avoid "tag soup".
+    """
+    raw = f"{(style or '').strip()} {(prompt_zh or '').strip()}".strip()
+    if not raw:
+        return ""
+
+    gender = _first_match(raw, _GENDER_WORDS) if not instrumental else None
+    timbre = _first_match(raw, _TIMBRE_WORDS)
+    genre = _first_match(raw, _GENRE_WORDS)
+    emotion = _first_match(raw, _EMOTION_WORDS)
+
+    # Instruments: reuse deterministic CN->EN mapper but keep it short (max 2)
+    inst_suggestion = suggest_songgen_style_tags(prompt_zh or "")
+    inst = []
+    for t in inst_suggestion.tags:
+        tl = (t or "").strip().lower()
+        if not tl:
+            continue
+        if tl.startswith("the bpm is "):
+            continue
+        # keep only obvious instrument tokens
+        if tl in {
+            "piano",
+            "guitar",
+            "electric guitar",
+            "bass",
+            "drums",
+            "percussion",
+            "strings",
+            "synth",
+            "violin",
+            "cello",
+            "saxophone",
+            "flute",
+            "choir",
+            "guzheng",
+            "erhu",
+            "pipa",
+            "dizi",
+            "guqin",
+        }:
+            inst.append(tl)
+        if len(inst) >= 2:
+            break
+    instrument = " and ".join(inst) if inst else None
+
+    bpm = _extract_bpm(raw)  # may come from prompt or style
+
+    parts: list[str] = []
+    if gender:
+        parts.append(gender)
+    if timbre:
+        parts.append(timbre)
+    if genre:
+        parts.append(genre)
+    if emotion:
+        parts.append(emotion)
+    if instrument:
+        parts.append(instrument)
+    if bpm:
+        parts.append(f"the bpm is {bpm}")
+
+    return ", ".join(parts)
+
+

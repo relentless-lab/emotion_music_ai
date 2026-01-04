@@ -147,7 +147,8 @@ def _background_chat_and_generate(
             return
 
         reply_text = f"收到你的描述：{payload.message}。我为你生成了一段对应氛围的音乐，请试听。"
-        duration = float(payload.duration_seconds) if payload.duration_seconds else 30.0
+        # 默认时长改为更“完整”的段落长度（用户侧不再强依赖手动选择时长）
+        duration = float(payload.duration_seconds) if payload.duration_seconds else 120.0
 
         # Generate a nicer title (Suno-like) and persist to dialogue title if missing.
         try:
@@ -387,7 +388,8 @@ async def chat_and_generate(
   # 简单回复逻辑，可后续替换为真实 LLM
   reply_text = f"收到你的描述：{payload.message}。我为你生成了一段对应氛围的音乐，请试听。"
 
-  duration = float(payload.duration_seconds) if payload.duration_seconds else 30.0
+  # 默认时长改为更“完整”的段落长度（用户侧不再强依赖手动选择时长）
+  duration = float(payload.duration_seconds) if payload.duration_seconds else 120.0
 
   # 1. 先生成音乐
   try:

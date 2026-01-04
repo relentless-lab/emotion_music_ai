@@ -159,22 +159,78 @@ async def get_recommended_creators(
     db: Session = Depends(get_db),
 ) -> list[RecommendedCreatorItem]:
     """
-    Recommend creators by a simple heuristic (followers + plays_received).
+    Recommend creators by long-term contribution signals (normalized + weighted):
+    - total_generations (10%)
+    - total_works       (20%)
+    - total_likes       (60%)
+
+    We apply log1p and min-max normalize each metric to reduce scale differences.
     """
-    rows = (
+    # Candidate creators: anyone with some activity signal
+    users = (
         db.query(User)
-        .order_by(User.followers_count.desc(), User.plays_received.desc(), User.total_works.desc())
-        .limit(int(limit))
+        .filter(
+            (User.total_generations > 0)
+            | (User.total_works > 0)
+            | (User.total_likes > 0)
+        )
+        .order_by(User.total_likes.desc(), User.total_works.desc(), User.total_generations.desc())
+        .limit(2000)
         .all()
     )
+    if not users:
+        return []
+
+    gens_log = [math.log1p(u.total_generations or 0) for u in users]
+    works_log = [math.log1p(u.total_works or 0) for u in users]
+    likes_log = [math.log1p(u.total_likes or 0) for u in users]
+
+    gens_n = _minmax_normalize(gens_log)
+    works_n = _minmax_normalize(works_log)
+    likes_n = _minmax_normalize(likes_log)
+
+    w_gen, w_works, w_likes = 0.1, 0.2, 0.6
+    w_sum = w_gen + w_works + w_likes
+    w_gen, w_works, w_likes = (w_gen / w_sum, w_works / w_sum, w_likes / w_sum)
+
+    scored: list[tuple[float, User]] = []
+    for i, u in enumerate(users):
+        score = w_gen * gens_n[i] + w_works * works_n[i] + w_likes * likes_n[i]
+        scored.append((score, u))
+
+    if all(math.isclose(s, 0.0) for s, _ in scored):
+        scored.sort(
+            key=lambda it: (
+                (it[1].total_likes or 0),
+                (it[1].total_works or 0),
+                (it[1].total_generations or 0),
+                (it[1].followers_count or 0),
+                (it[1].created_at or datetime.min),
+            ),
+            reverse=True,
+        )
+    else:
+        scored.sort(
+            key=lambda it: (
+                it[0],
+                (it[1].total_likes or 0),
+                (it[1].total_works or 0),
+                (it[1].total_generations or 0),
+                (it[1].followers_count or 0),
+            ),
+            reverse=True,
+        )
+
+    top = [u for _, u in scored[: int(limit)]]
     return [
         RecommendedCreatorItem(
             id=u.id,
             name=u.username,
             handle=f"@{u.username}",
             followers=_format_followers(u.followers_count),
-            avatar=u.avatar,
+            # IMPORTANT: resolve oss:// and other storage paths to actual URL
+            avatar=resolve_cover_url(u.avatar),
         )
-        for u in rows
+        for u in top
     ]
 

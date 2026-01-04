@@ -105,18 +105,6 @@
                   <span class="duration-badge">仿写</span>
                 </button>
                 <button
-                  class="duration-btn"
-                  type="button"
-                  :disabled="sending"
-                  @click="showDurationPopover = !showDurationPopover"
-                  title="生成时长"
-                >
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                  </svg>
-                  <span class="duration-badge">{{ duration }}s</span>
-                </button>
-                <button
                   class="send-btn"
                   type="button"
                   :disabled="sending || !messageInput.trim()"
@@ -128,37 +116,6 @@
                   </svg>
                   <span v-else class="loading-spinner"></span>
                 </button>
-              </div>
-              <div v-if="showDurationPopover" class="duration-popover" @click.stop>
-                <div class="popover-header">
-                  <span>生成时长</span>
-                  <button class="popover-close" @click="showDurationPopover = false">×</button>
-                </div>
-                <div class="popover-options">
-                  <button
-                    v-for="opt in durationOptions"
-                    :key="opt"
-                    class="duration-option"
-                    :class="{ active: duration === opt }"
-                    @click="duration = opt; showDurationPopover = false"
-                  >
-                    {{ opt }} 秒
-                  </button>
-                </div>
-                <div class="popover-slider">
-                  <input
-                    type="range"
-                    min="30"
-                    max="300"
-                    step="10"
-                    v-model.number="duration"
-                    :disabled="sending"
-                  />
-                  <div class="slider-labels">
-                    <span>30s</span>
-                    <span>300s</span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -239,13 +196,12 @@ const lastResponse = ref(null);
 const sending = ref(false);
 const error = ref("");
 const modelIndex = ref(0);
-const duration = ref(60);
+// 默认生成时长：前端不再提供时长选择，避免“像被截断”的主观体验
+const DEFAULT_DURATION_SECONDS = 120;
 const isInstrumental = ref(true);
 const lyricsInput = ref("");
 const addingWorkId = ref(null);
 const addedWorkIds = ref(new Set()); // 跟踪已保存的作品ID
-const showDurationPopover = ref(false);
-const durationOptions = [30, 40, 60, 90, 120, 180, 300];
 const toastMessage = ref("");
 const toastType = ref("success");
 let toastTimer = null;
@@ -431,12 +387,6 @@ const pollTaskStatus = async (taskId, tempId) => {
   }, 3000);
 };
 
-const handleClickOutside = (e) => {
-  if (showDurationPopover.value && !e.target.closest('.duration-btn') && !e.target.closest('.duration-popover')) {
-    showDurationPopover.value = false;
-  }
-};
-
 onMounted(async () => {
   player.initAudio();
   
@@ -451,11 +401,9 @@ onMounted(async () => {
     }
   }
   
-  document.addEventListener('click', handleClickOutside);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
 });
 
 const loadDialogue = async id => {
@@ -692,7 +640,6 @@ const sendMessage = async () => {
 
   try {
     const body = { message: text };
-    body.duration_seconds = duration.value;
     if (dialogueId.value) body.dialogue_id = dialogueId.value;
     body.instrumental = !!isInstrumental.value;
     body.lyrics = isInstrumental.value ? null : (lyricsInput.value || "").trim() || null;
@@ -804,7 +751,7 @@ const sendImitate = async (file) => {
     const res = await imitateMusicAsync({
       file,
       prompt: text,
-      duration_seconds: duration.value,
+      duration_seconds: DEFAULT_DURATION_SECONDS,
       instrumental: !!isInstrumental.value,
       lyrics: isInstrumental.value ? null : (lyricsInput.value || "").trim() || null
     });

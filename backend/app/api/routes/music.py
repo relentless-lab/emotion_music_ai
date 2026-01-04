@@ -53,7 +53,8 @@ async def generate_music_file(
   if model_name not in {"musicgen_pretrained", "musicgen_finetune", "songgen_full_new"}:
     raise HTTPException(status_code=400, detail="不支持的模型")
 
-  duration = payload.duration_seconds or 30
+  # 默认时长改为更“完整”的段落长度（用户侧不再强依赖手动选择时长）
+  duration = payload.duration_seconds or 120
   try:
     gen_result = generation_service.generate_music_file(
         prompt_zh=payload.prompt,
@@ -237,7 +238,7 @@ async def imitate_music_task(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="参考音频文件（只取前 10 秒）"),
     prompt: str = Form("", description="可选：附加文字指令（如 伤心 钢琴 电影感）"),
-    duration_seconds: int = Form(60, ge=1, le=600),
+    duration_seconds: int = Form(120, ge=1, le=600),
     instrumental: bool = Form(True),
     lyrics: str | None = Form(None),
     style: str | None = Form(None),

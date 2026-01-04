@@ -12,8 +12,12 @@ from app.musicgen.musicgen_pretrained import MusicGenPretrained, MusicGenPretrai
 from app.musicgen.musicgen_remote import MusicGenRemote
 from app.services.storage_service import save_audio_bytes, save_audio_waveform
 from app.songgen.songgen_remote import get_songgen_client
-from app.services.songgen_style_tags import merge_style_tags, suggest_songgen_style_tags
-from app.services.songgen_llm_enhancer import enhance_for_songgen, sanitize_user_lyrics
+from app.services.songgen_style_tags import (
+    merge_style_tags,
+    normalize_songgen_descriptions,
+    suggest_songgen_style_tags,
+)
+from app.services.songgen_llm_enhancer import enhance_for_songgen, ensure_structured_lyrics, sanitize_user_lyrics
 
 import wave
 from pathlib import Path
@@ -108,6 +112,8 @@ def generate_music_file(
                 )
             else:
                 lyrics_to_send = llm_lyrics
+            if (lyrics_to_send or "").strip():
+                lyrics_to_send = ensure_structured_lyrics(lyrics_to_send or "", duration_sec=int(duration_sec))
 
         # 2) Descriptions/style to send:
         # Prefer LLM descriptions; fallback to deterministic keyword extractor.
@@ -123,6 +129,14 @@ def generate_music_file(
 
         if not (style_to_send or "").strip():
             style_to_send = "instrumental" if instrumental else "vocal"
+
+        # Normalize into recommended 6 stable dimensions for SongGeneration.
+        normalized = normalize_songgen_descriptions(
+            prompt_zh=prompt_zh or "",
+            style=style_to_send,
+            instrumental=bool(instrumental),
+        )
+        style_to_send = normalized or style_to_send
 
         # Debug visibility: makes it easy to verify tag extraction in logs
         try:

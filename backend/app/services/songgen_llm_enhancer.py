@@ -8,6 +8,8 @@ from openai import OpenAI
 
 from app.core.config import settings
 
+_STRUCTURE_TAG_RE = re.compile(r"\[(intro|outro|verse|chorus|bridge)[^\]]*\]", re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class SongGenLLMEnhanceResult:
@@ -74,6 +76,90 @@ def sanitize_user_lyrics(raw: str, *, max_chars: int) -> str:
     return s
 
 
+def ensure_structured_lyrics(raw: str, *, duration_sec: int) -> str:
+    """
+    Ensure lyrics are in SongGeneration gt_lyric structured format.
+
+    - If user/LLM already provides structure tags, keep them but ensure an outro segment exists.
+    - If plain text, wrap into a stable template (avoid [inst]) to reduce "sudden stop".
+    """
+    s = (raw or "").strip()
+    if not s:
+        return ""
+
+    # Already structured: keep but ensure an outro segment exists.
+    if _STRUCTURE_TAG_RE.search(s):
+        out = s.strip().rstrip(";").strip()
+        if "[outro" not in out.lower():
+            # pick outro length by duration
+            outro = "[outro-medium]" if int(duration_sec) >= 120 else "[outro-short]"
+            out = f"{out} ; {outro}"
+        return out
+
+    # Plain text: split into sentence-like parts and allocate into sections.
+    # Keep units short-ish to avoid extremely long lines.
+    parts = re.split(r"[。\r\n]+|[.!?]+", s)
+    parts = [p.strip() for p in parts if p.strip()]
+    if not parts:
+        parts = [s]
+    parts = parts[:18]
+
+    def take(n: int, start: int) -> list[str]:
+        if not parts:
+            return []
+        out = []
+        for i in range(n):
+            out.append(parts[(start + i) % len(parts)])
+        return out
+
+    # Map duration to a stable song form (no [inst]).
+    d = int(duration_sec or 0)
+    if d <= 75:
+        # 60s: intro + verse + chorus + outro
+        verse = take(4, 0)
+        chorus = take(4, 4)
+        outro = "[outro-short]"
+        return (
+            "[intro-short] ; "
+            f"[verse] {'. '.join(verse)}. ; "
+            f"[chorus] {'. '.join(chorus)}. ; "
+            f"{outro}"
+        )
+    if d <= 105:
+        # 90s: intro + verse + chorus + verse + chorus + outro
+        verse1 = take(4, 0)
+        chorus1 = take(4, 4)
+        verse2 = take(4, 8)
+        chorus2 = take(4, 12)
+        outro = "[outro-short]"
+        return (
+            "[intro-short] ; "
+            f"[verse] {'. '.join(verse1)}. ; "
+            f"[chorus] {'. '.join(chorus1)}. ; "
+            f"[verse] {'. '.join(verse2)}. ; "
+            f"[chorus] {'. '.join(chorus2)}. ; "
+            f"{outro}"
+        )
+
+    # 120s+: intro-medium + 2 verse + 3 chorus + bridge + outro-medium
+    verse1 = take(4, 0)
+    chorus1 = take(4, 4)
+    verse2 = take(4, 8)
+    chorus2 = take(4, 12)
+    bridge = take(3, 16)
+    chorus3 = chorus1 or take(4, 0)
+    return (
+        "[intro-medium] ; "
+        f"[verse] {'. '.join(verse1)}. ; "
+        f"[chorus] {'. '.join(chorus1)}. ; "
+        f"[verse] {'. '.join(verse2)}. ; "
+        f"[chorus] {'. '.join(chorus2)}. ; "
+        f"[bridge] {'. '.join(bridge)}. ; "
+        f"[chorus] {'. '.join(chorus3)}. ; "
+        "[outro-medium]"
+    )
+
+
 def _safe_trim(s: str | None, *, max_chars: int) -> str | None:
     if not s:
         return None
@@ -127,15 +213,18 @@ def enhance_for_songgen(
         '  \"rewritten_prompt\": \"optional improved Chinese prompt or null\"\n'
         "}\n\n"
         "Rules:\n"
-        "- descriptions: concise English tags (genre, mood, instruments, arrangement, tempo/BPM if known).\n"
+        "- descriptions: STRICT 6-dimension English tags, comma-separated, in this order:\n"
+        "  Gender, Timbre, Genre, Emotion, Instrument, the bpm is N.\n"
+        "  Use 1-2 short tokens per dimension. If unknown, omit that dimension.\n"
         "- Avoid negation like 'no drums/no vocals'. Prefer positive instructions.\n"
         "- If user references a famous song/anime style: DO NOT copy lyrics, DO NOT mention artist names.\n"
         "  Translate into generic tags like 'western pop, acoustic guitar, duet, nostalgic, 2010s' etc.\n"
         "- If lyrics is requested: generate ORIGINAL lyrics and follow SongGeneration format:\n"
-        "  - use [verse], [chorus], [bridge], and optionally [intro-short]/[outro-short]\n"
+        "  - use [intro-medium], [verse], [chorus], [bridge], [outro-medium]\n"
         "  - sections separated by ' ; '\n"
         "  - within lyrical sections, sentences separated by '.'\n"
-        "  - keep length reasonable for duration\n"
+        "  - ensure the lyric ends with an outro segment\n"
+        "  - choose structure length to fit duration: 60s=verse+chorus, 90s=verse+chorus+verse+chorus, 120s+=2verse+3chorus+bridge\n"
     )
 
     user_payload = {
