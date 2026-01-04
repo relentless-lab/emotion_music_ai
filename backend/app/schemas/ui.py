@@ -41,3 +41,4 @@ class RecommendedCreatorItem(BaseModel):
     followers: str
     handle: str
     avatar: Optional[str] = None
+    is_followed: bool = False

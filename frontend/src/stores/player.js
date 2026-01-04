@@ -152,8 +152,17 @@ export const usePlayerStore = defineStore("player", {
           [id]: now
         };
 
-        // best-effort：不上报成功与否不影响播放
-        recordWorkPlay(id, { source: "player" }).catch(() => {});
+        // best-effort：成功后同步更新本地计数，实现 UI 即时反馈
+        recordWorkPlay(id, { source: "player" }).then(res => {
+          if (res && typeof res.playCount === "number") {
+            // 更新当前 playlist 里的该歌曲对象（Vue 响应式会同步到所有卡片）
+            const item = this.playlist.find(track => track.id === id);
+            if (item) {
+              item.play_count = res.playCount;
+              item.playCount = res.playCount; // 兼容不同组件命名
+            }
+          }
+        }).catch(() => {});
       } catch {
         // ignore
       }

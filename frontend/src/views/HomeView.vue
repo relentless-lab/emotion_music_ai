@@ -25,12 +25,31 @@
           </label>
           <label class="field">
             <span>密码</span>
-            <input
-              v-model="loginForm.password"
-              type="password"
-              placeholder="请输入密码"
-              required
-            />
+            <div class="password-input-wrapper">
+              <input
+                v-model="loginForm.password"
+                :type="showLoginPassword ? 'text' : 'password'"
+                placeholder="请输入密码"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                @click="showLoginPassword = !showLoginPassword"
+                :title="showLoginPassword ? '隐藏密码' : '显示密码'"
+              >
+                <!-- 睁眼 -->
+                <svg v-if="showLoginPassword" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <!-- 闭眼 -->
+                <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
           </label>
 
           <button class="cta primary" type="submit" :disabled="auth.loading">
@@ -69,16 +88,55 @@
           </label>
           <label class="field">
             <span>密码</span>
-            <input v-model="registerForm.password" type="password" placeholder="请输入密码" required />
+            <div class="password-input-wrapper">
+              <input
+                v-model="registerForm.password"
+                :type="showRegisterPassword ? 'text' : 'password'"
+                placeholder="请输入密码"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                @click="showRegisterPassword = !showRegisterPassword"
+                :title="showRegisterPassword ? '隐藏密码' : '显示密码'"
+              >
+                <svg v-if="showRegisterPassword" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
           </label>
           <label class="field">
             <span>确认密码</span>
-            <input
-              v-model="registerForm.confirm"
-              type="password"
-              placeholder="再次输入密码"
-              required
-            />
+            <div class="password-input-wrapper">
+              <input
+                v-model="registerForm.confirm"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                placeholder="再次输入密码"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                @click="showConfirmPassword = !showConfirmPassword"
+                :title="showConfirmPassword ? '隐藏密码' : '显示密码'"
+              >
+                <svg v-if="showConfirmPassword" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
           </label>
 
           <div class="terms">
@@ -113,6 +171,13 @@
 
     <div v-if="showLoginSuccessToast" class="toast success-toast">登录成功</div>
     <div v-if="showCodeSuccessToast" class="toast success-toast">验证码已发送</div>
+    <div
+      v-if="showActionToast"
+      class="toast"
+      :class="actionToastType === 'error' ? 'error-toast' : 'success-toast'"
+    >
+      {{ actionToastMessage }}
+    </div>
 
     <SearchHeader v-model="searchKeyword" @search="gotoSearch" />
 
@@ -137,14 +202,6 @@
             @card-click="gotoSongDetail"
           />
         </div>
-        <div class="expand-section">
-          <button class="expand-button">
-            <span>展开</span>
-            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-              <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
-            </svg>
-          </button>
-        </div>
       </section>
 
       <section class="panel">
@@ -155,15 +212,13 @@
           </div>
         </div>
         <div class="creators-list">
-          <CreatorCard v-for="creator in creators" :key="creator.id" :creator="creator" />
-        </div>
-        <div class="expand-section">
-          <button class="expand-button">
-            <span>展开</span>
-            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-              <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
-            </svg>
-          </button>
+          <CreatorCard
+            v-for="creator in creators"
+            :key="creator.id"
+            :creator="creator"
+            @card-click="gotoUserDetail"
+            @follow="toggleFollowCreator"
+          />
         </div>
       </section>
     </div>
@@ -182,6 +237,7 @@ import { sendVerificationCode } from "../services/authApi";
 import SearchHeader from "@/components/SearchHeader.vue";
 import { fetchHotSongs, fetchRecommendedCreators } from "@/services/uiApi";
 import { usePlayerStore } from "@/stores/player";
+import { followUser, unfollowUser } from "@/services/searchApi";
 
 const auth = useAuthStore();
 const ui = useUiStore();
@@ -221,12 +277,35 @@ const showLoginSuccessToast = ref(false);
 let loginSuccessTimer;
 const searchKeyword = ref("");
 
+// 密码可见性控制
+const showLoginPassword = ref(false);
+const showRegisterPassword = ref(false);
+const showConfirmPassword = ref(false);
+
 // 验证码相关状态
 const countdown = ref(0);
 const isSendingCode = ref(false);
 const showCodeSuccessToast = ref(false);
 let countdownTimer = null;
 let codeSuccessTimer = null;
+
+// 通用动作 toast（用于关注/提示等）
+const showActionToast = ref(false);
+const actionToastMessage = ref("");
+const actionToastType = ref("success"); // success | error
+let actionToastTimer = null;
+
+const triggerActionToast = (message, type = "success", durationMs = 1800) => {
+  actionToastMessage.value = message || "";
+  actionToastType.value = type;
+  showActionToast.value = !!actionToastMessage.value;
+  if (actionToastTimer) clearTimeout(actionToastTimer);
+  actionToastTimer = setTimeout(() => {
+    showActionToast.value = false;
+    actionToastMessage.value = "";
+    actionToastTimer = null;
+  }, durationMs);
+};
 
 const triggerLoginSuccessToast = () => {
   if (loginSuccessTimer) {
@@ -357,6 +436,15 @@ onMounted(() => {
   auth.refreshProfile();
 });
 
+const ensureLogin = () => {
+  if (!auth.isLoggedIn) {
+    ui.openLoginPanel();
+    triggerActionToast("请先登录后再操作", "error");
+    return false;
+  }
+  return true;
+};
+
 const playableHotSongs = computed(() => (songs.value || []).filter(s => (s?.url || "").trim()));
 
 const playHotSong = song => {
@@ -372,6 +460,35 @@ const gotoSongDetail = song => {
   const id = song?.id;
   if (!id) return;
   router.push({ name: "songDetail", params: { id } });
+};
+
+const gotoUserDetail = creator => {
+  const id = creator?.id;
+  if (!id) return;
+  router.push({ name: "userPublic", params: { id } });
+};
+
+const toggleFollowCreator = async creator => {
+  if (!creator) return;
+  if (!ensureLogin()) return;
+  const myId = auth.user?.id;
+  if (myId && creator.id === myId) {
+    triggerActionToast("无法关注自己", "error");
+    return;
+  }
+  try {
+    if (creator.is_followed) {
+      await unfollowUser(creator.id);
+      creator.is_followed = false;
+      triggerActionToast("已取消关注", "success");
+    } else {
+      await followUser(creator.id);
+      creator.is_followed = true;
+      triggerActionToast("关注成功", "success");
+    }
+  } catch (err) {
+    triggerActionToast(err?.message || "操作失败", "error");
+  }
 };
 
 const loadHotSongs = async () => {
@@ -406,13 +523,14 @@ const loadHotSongs = async () => {
 
 const loadRecommendedCreators = async () => {
   try {
-    const res = await fetchRecommendedCreators({ limit: 9 });
+    const res = await fetchRecommendedCreators({ limit: 7 });
     if (Array.isArray(res) && res.length) {
       creators.value = res.map(item => ({
         id: item.id,
         name: item.name,
         followers: item.followers,
         handle: item.handle,
+        is_followed: !!item.is_followed,
         // only normalize API results (placeholders should remain local assets)
         avatar: toAbsoluteUrl(item.avatar || "")
       }));
@@ -436,6 +554,9 @@ onBeforeUnmount(() => {
   }
   if (codeSuccessTimer) {
     clearTimeout(codeSuccessTimer);
+  }
+  if (actionToastTimer) {
+    clearTimeout(actionToastTimer);
   }
 });
 
@@ -540,6 +661,7 @@ const creators = ref([
     name: "Timotheus",
     followers: "5.2K followers",
     handle: "@timotheus",
+    is_followed: false,
     avatar: "/avatars/02567c1fd7d6e84c7bc3f5eb83fbb20b.jpg"
   },
   {
@@ -547,6 +669,7 @@ const creators = ref([
     name: "Brutus",
     followers: "17K followers",
     handle: "@brutus",
+    is_followed: false,
     avatar: "/avatars/13b2894291a2545053b7b80245b3ad49.jpg"
   },
   {
@@ -554,6 +677,7 @@ const creators = ref([
     name: "EvilTyremancer",
     followers: "14K followers",
     handle: "@eviltyremancer",
+    is_followed: false,
     avatar: "/avatars/2dc212f966be73e8ff964aac88208167.jpg"
   },
   {
@@ -561,6 +685,7 @@ const creators = ref([
     name: "MusicMaster",
     followers: "23K followers",
     handle: "@musicmaster",
+    is_followed: false,
     avatar: "/avatars/32b72fbc42357a2646642f721e3557fe.jpg"
   },
   {
@@ -568,6 +693,7 @@ const creators = ref([
     name: "BeatMaker",
     followers: "8.7K followers",
     handle: "@beatmaker",
+    is_followed: false,
     avatar: "/avatars/b5e9f4ec3ba35ebf2ef7aaf134f63072_0.jpg"
   },
   {
@@ -575,6 +701,7 @@ const creators = ref([
     name: "SoundWave",
     followers: "12.5K followers",
     handle: "@soundwave",
+    is_followed: false,
     avatar: "/avatars/bfd6dd67f27836dbe2df91b7b70daeae_0.jpg"
   },
   {
@@ -582,21 +709,8 @@ const creators = ref([
     name: "MelodyMaker",
     followers: "9.8K followers",
     handle: "@melodymaker",
+    is_followed: false,
     avatar: "/avatars/c9fa4c3f8bb8e93a7e8512ad6b101bb0_0.jpg"
-  },
-  {
-    id: 8,
-    name: "RhythmKing",
-    followers: "15.3K followers",
-    handle: "@rhythmking",
-    avatar: "/avatars/e294b24b73ddf1aaa579391c508ae5a8.jpg"
-  },
-  {
-    id: 9,
-    name: "Harmony",
-    followers: "11.2K followers",
-    handle: "@harmony",
-    avatar: "/avatars/f29a797b0989af458f4903f961f1b9b4.jpg"
   }
 ]);
 </script>
@@ -675,6 +789,37 @@ const creators = ref([
 .auth-form input:focus {
   border-color: rgba(79, 133, 255, 0.9);
   box-shadow: 0 0 0 2px rgba(79, 133, 255, 0.35);
+}
+
+.password-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 40px; /* 为小眼睛留出空间 */
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+  z-index: 2;
+}
+
+.password-toggle:hover {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .register-form {
@@ -914,6 +1059,20 @@ const creators = ref([
   z-index: 10000;
   animation: toast-in 0.18s ease;
   letter-spacing: 0.02em;
+}
+
+.toast.success-toast {
+  color: #071c12;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.96), rgba(52, 211, 153, 0.96));
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  box-shadow: 0 12px 32px rgba(16, 185, 129, 0.3);
+}
+
+.toast.error-toast {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(248, 113, 113, 0.9));
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  box-shadow: 0 12px 32px rgba(239, 68, 68, 0.25);
 }
 
 @keyframes toast-in {

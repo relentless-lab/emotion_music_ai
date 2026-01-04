@@ -13,8 +13,15 @@ from app.models.user import User
 from app.models.work import Work, WorkStatus, WorkVisibility
 from app.models.work_play_log import WorkPlayLog
 from app.schemas.social import SimpleMessage
-from app.schemas.work import WorkAuthor, WorkCreateRequest, WorkPublicResponse, WorkResponse, WorkUpdateRequest
-from app.schemas.work import WorkPlayRequest
+from app.schemas.work import (
+    WorkAuthor,
+    WorkCreateRequest,
+    WorkPlayRequest,
+    WorkPlayResponse,
+    WorkPublicResponse,
+    WorkResponse,
+    WorkUpdateRequest,
+)
 from app.services.oss_storage import (
     OSSStorage,
     build_oss_key,
@@ -222,7 +229,8 @@ async def update_work(
   if payload.mood is not None:
     work.mood = payload.mood
   if payload.cover_url is not None:
-    work.cover_url = normalize_oss_like_url(payload.cover_url)
+    # 允许清空封面或更新为新路径（支持自定义上传）
+    work.cover_url = normalize_oss_like_url(payload.cover_url) if payload.cover_url else None
 
   db.add(work)
 
@@ -344,7 +352,7 @@ async def get_public_work(
 
 @router.post(
     "/{work_id}/play",
-    response_model=SimpleMessage,
+    response_model=WorkPlayResponse,
     summary="Record a play for a public work (no auth required)",
 )
 async def record_work_play(
@@ -352,7 +360,7 @@ async def record_work_play(
     payload: WorkPlayRequest | None = Body(default=None),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
-) -> SimpleMessage:
+) -> WorkPlayResponse:
   """
   Write a play log (for trending window queries) and increment `works.play_count`.
 
@@ -385,7 +393,7 @@ async def record_work_play(
     db.add(author)
 
   db.commit()
-  return SimpleMessage(message="ok")
+  return WorkPlayResponse(message="ok", play_count=work.play_count)
 
 
 @router.get(

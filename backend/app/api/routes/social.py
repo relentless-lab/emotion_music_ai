@@ -157,7 +157,7 @@ async def follow_user(
     current_user: User = Depends(get_current_user),
 ) -> ToggleResponse:
   if current_user.id == user_id:
-    raise HTTPException(status_code=400, detail="不能关注自己")
+    raise HTTPException(status_code=400, detail="无法关注自己")
 
   target = db.query(User).filter(User.id == user_id).first()
   if not target:

@@ -61,3 +61,8 @@ class WorkPublicResponse(WorkResponse):
 
 class WorkPlayRequest(BaseModel):
   source: Optional[str] = Field(None, description="播放来源（用于统计，最长 50 字符）")
+
+
+class WorkPlayResponse(BaseModel):
+  message: str = "ok"
+  play_count: int = Field(..., serialization_alias="playCount")

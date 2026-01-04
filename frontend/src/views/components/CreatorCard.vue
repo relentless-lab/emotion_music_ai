@@ -1,5 +1,5 @@
 <template>
-  <div class="creator-card">
+  <div class="creator-card" @click="$emit('card-click', creator)">
     <div class="creator-info">
       <img
         v-if="creator.avatar"
@@ -20,7 +20,14 @@
       </div>
     </div>
 
-    <button class="follow-button">关注</button>
+    <button
+      class="follow-button"
+      :class="{ 'is-followed': creator.is_followed }"
+      type="button"
+      @click.stop="$emit('follow', creator)"
+    >
+      {{ creator.is_followed ? "已关注" : "关注" }}
+    </button>
   </div>
 </template>
 
@@ -31,6 +38,8 @@ defineProps({
     required: true
   }
 });
+
+defineEmits(["card-click", "follow"]);
 </script>
 
 <style scoped>
@@ -127,6 +136,22 @@ defineProps({
 .follow-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(96, 165, 250, 0.35);
+}
+
+.follow-button:active {
+  transform: translateY(0);
+}
+
+.follow-button.is-followed {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(226, 232, 240, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+
+.follow-button.is-followed:hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
 }
 </style>
 

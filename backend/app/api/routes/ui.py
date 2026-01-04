@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.dependencies import get_db
+from app.core.dependencies import get_current_user_optional, get_db
 from app.models.like_record import LikeRecord
 from app.models.user import User
+from app.models.user_follower import UserFollower
 from app.models.work import Work, WorkStatus, WorkVisibility
 from app.models.work_play_log import WorkPlayLog
 from app.schemas.ui import ClientConfig, HotSongItem, ModelOption, RecommendedCreatorItem, UploadPolicy
@@ -155,8 +156,9 @@ async def get_hot_songs(
     summary="Homepage recommended creators",
 )
 async def get_recommended_creators(
-    limit: int = Query(default=9, ge=1, le=50),
+    limit: int = Query(default=7, ge=1, le=50),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> list[RecommendedCreatorItem]:
     """
     Recommend creators by long-term contribution signals (normalized + weighted):
@@ -222,6 +224,18 @@ async def get_recommended_creators(
         )
 
     top = [u for _, u in scored[: int(limit)]]
+
+    followed_ids: set[int] = set()
+    if current_user and top:
+        rows = (
+            db.query(UserFollower.following_id)
+            .filter(
+                UserFollower.follower_id == current_user.id,
+                UserFollower.following_id.in_([u.id for u in top]),
+            )
+            .all()
+        )
+        followed_ids = {r[0] for r in rows}
     return [
         RecommendedCreatorItem(
             id=u.id,
@@ -230,6 +244,7 @@ async def get_recommended_creators(
             followers=_format_followers(u.followers_count),
             # IMPORTANT: resolve oss:// and other storage paths to actual URL
             avatar=resolve_cover_url(u.avatar),
+            is_followed=(u.id in followed_ids),
         )
         for u in top
     ]

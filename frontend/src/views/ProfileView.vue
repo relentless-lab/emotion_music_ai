@@ -130,8 +130,10 @@
           :song="work"
           :cover="work.cover"
           :play-count="work.play_count"
+          :show-actions="true"
           @play="playWork(work)"
           @card-click="goToWorkDetail(work.id)"
+          @more="handleWorkMore"
         />
       </div>
     </section>
@@ -207,6 +209,39 @@
         </div>
       </div>
     </div>
+
+    <!-- 作品编辑/更换封面模态框 -->
+    <div v-if="showWorkModal" class="modal-backdrop" @click.self="closeWorkEditModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>编辑作品信息</h3>
+          <button class="icon-btn" type="button" @click="closeWorkEditModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="field">
+            <span>封面图片</span>
+            <input type="file" accept="image/*" @change="onWorkCoverChange" />
+            <div v-if="workEditForm.cover_url" class="cover-preview">
+              <img :src="toAbsoluteUrl(workEditForm.cover_url)" alt="封面预览" />
+            </div>
+          </label>
+          <label class="field">
+            <span>作品名称</span>
+            <input v-model="workEditForm.title" placeholder="请输入作品名称" />
+          </label>
+          <label class="field">
+            <span>描述</span>
+            <textarea v-model="workEditForm.description" rows="3" placeholder="作品描述"></textarea>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-btn" type="button" @click="closeWorkEditModal">取消</button>
+          <button class="primary-btn" type="button" :disabled="savingWork" @click="submitWorkEdit">
+            {{ savingWork ? "保存中..." : "保存修改" }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -214,7 +249,7 @@
 import { computed, reactive, ref, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
-import { fetchWorks } from "@/services/workApi";
+import { fetchWorks, updateWork, uploadWorkCover } from "@/services/workApi";
 import { usePlayerStore } from "@/stores/player";
 import { fetchFollowers, fetchFollowing, fetchLikedWorks } from "@/services/searchApi";
 import SongImageCard from "@/views/components/SongImageCard.vue";
@@ -462,6 +497,66 @@ const saveProfile = async () => {
   }
 };
 
+const handleWorkMore = item => {
+  // 已发布作品的更多操作：更换封面
+  openWorkEditModal(item);
+};
+
+const showWorkModal = ref(false);
+const modalWorkItem = ref(null);
+const workEditForm = reactive({
+  title: "",
+  description: "",
+  visibility: "public",
+  cover_url: ""
+});
+const savingWork = ref(false);
+
+const openWorkEditModal = item => {
+  modalWorkItem.value = item;
+  workEditForm.title = item.title || "";
+  workEditForm.description = item.description || "";
+  workEditForm.visibility = item.visibility || "public";
+  workEditForm.cover_url = item.cover_url || "";
+  showWorkModal.value = true;
+};
+
+const closeWorkEditModal = () => {
+  showWorkModal.value = false;
+  modalWorkItem.value = null;
+};
+
+const onWorkCoverChange = async e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const res = await uploadWorkCover(file);
+    workEditForm.cover_url = res?.cover_url || "";
+  } catch (err) {
+    errorMessage.value = err?.message || "封面上传失败";
+  }
+};
+
+const submitWorkEdit = async () => {
+  if (!modalWorkItem.value) return;
+  savingWork.value = true;
+  try {
+    await updateWork(modalWorkItem.value.id, {
+      title: workEditForm.title,
+      description: workEditForm.description,
+      visibility: workEditForm.visibility,
+      cover_url: workEditForm.cover_url || null
+    });
+    successMessage.value = "作品已更新";
+    showWorkModal.value = false;
+    await loadPublishedWorks(); // 重新加载以全站同步
+  } catch (err) {
+    errorMessage.value = err?.message || "保存失败";
+  } finally {
+    savingWork.value = false;
+  }
+};
+
 async function loadPublishedWorks() {
   if (!isLoggedIn.value) {
     publishedWorks.value = [];
@@ -608,6 +703,98 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 模态框样式增强 */
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field input,
+.field textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: #3b82f6;
+}
+
+.cover-preview {
+  width: 160px;
+  height: 160px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  margin-top: 4px;
+}
+
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modal-actions {
+  padding: 16px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  z-index: 3000;
+}
+
+.modal {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .profile-page {
   display: flex;
   flex-direction: column;

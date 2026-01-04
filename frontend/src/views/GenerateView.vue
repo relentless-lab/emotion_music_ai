@@ -53,7 +53,7 @@
                 class="chat-input"
               ></textarea>
 
-            <!-- 生成模式：纯音乐 / 有人声 -->
+            <!-- 生成模式与操作：纯音乐 / 有人声 / 仿写 -->
             <div class="mode-row">
               <button
                 class="mode-chip"
@@ -73,50 +73,52 @@
               >
                 有人声 / 歌曲
               </button>
+
+              <button
+                class="mode-chip imitate-chip"
+                type="button"
+                :disabled="sending"
+                @click="triggerImitatePick"
+                title="请点击上传参考音频"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                <span>音乐仿写</span>
+              </button>
             </div>
 
-            <div v-if="!isInstrumental" class="lyrics-container">
+            <div v-if="!isInstrumental" class="lyrics-section">
+              <div class="section-label">歌词设置</div>
               <textarea
                 v-model="lyricsInput"
                 :disabled="sending"
-                placeholder="可选：输入你想要的歌词（支持 [verse]/[chorus] 结构）。不填则会用上面的描述作为歌词。"
+                placeholder="输入你想要的歌词（支持 [verse]/[chorus] 结构），不填则自动生成"
                 class="lyrics-input"
               ></textarea>
             </div>
 
-              <div class="input-actions">
-                <input
-                  ref="imitateFileInputRef"
-                  type="file"
-                  accept="audio/*"
-                  style="display:none"
-                  @change="onImitateFileChange"
-                />
-                <button
-                  class="duration-btn"
-                  type="button"
-                  :disabled="sending"
-                  @click="triggerImitatePick"
-                  title="音乐仿写（上传参考音频）"
-                >
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-                  </svg>
-                  <span class="duration-badge">仿写</span>
-                </button>
-                <button
-                  class="send-btn"
-                  type="button"
-                  :disabled="sending || !messageInput.trim()"
-                  @click="sendMessage"
-                  :class="{ loading: sending }"
-                >
-                  <svg v-if="!sending" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                  </svg>
-                  <span v-else class="loading-spinner"></span>
-                </button>
-              </div>
+            <div class="input-actions">
+              <input
+                ref="imitateFileInputRef"
+                type="file"
+                accept="audio/*"
+                style="display:none"
+                @change="onImitateFileChange"
+              />
+              <button
+                class="send-btn"
+                type="button"
+                :disabled="sending || !messageInput.trim()"
+                @click="sendMessage"
+                :class="{ loading: sending }"
+              >
+                <svg v-if="!sending" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+                <span v-else class="loading-spinner"></span>
+              </button>
+            </div>
             </div>
           </div>
 
@@ -175,6 +177,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useAuthStore } from "@/stores/auth";
 import { 
   chatWithDialogue, 
   getDialogueDetail, 
@@ -188,6 +191,7 @@ import { usePlayerStore } from "@/stores/player";
 import GenerateMusicSidebar from "./components/GenerateMusicSidebar.vue";
 
 const route = useRoute();
+const auth = useAuthStore();
 const messageInput = ref("");
 const dialogueId = ref(null);
 const messages = ref([]);
@@ -236,9 +240,25 @@ const presets = [
 const player = usePlayerStore();
 
 // --- 状态持久化逻辑 ---
-const STORAGE_KEY = 'latest_music_generation_session';
+// 注意：必须按用户隔离，避免“游客/其他账号”看到上一位用户的会话
+const BASE_STORAGE_KEY = "latest_music_generation_session_v2";
+
+const getStorageKey = () => {
+  const uid = auth?.user?.id;
+  if (!auth?.isLoggedIn || !uid) return `${BASE_STORAGE_KEY}:guest`;
+  return `${BASE_STORAGE_KEY}:user:${uid}`;
+};
 
 const saveSessionToStorage = () => {
+  // 游客不做持久化：每次进入都应该是新的界面
+  if (!auth?.isLoggedIn) {
+    try {
+      localStorage.removeItem(`${BASE_STORAGE_KEY}:guest`);
+    } catch {
+      // ignore
+    }
+    return;
+  }
   try {
     // Avoid localStorage quota issues by limiting payload size.
     const safeMessages = Array.isArray(messages.value) ? messages.value.slice(-80) : [];
@@ -251,13 +271,14 @@ const saveSessionToStorage = () => {
       : [];
 
     const sessionData = {
+      owner_user_id: auth?.user?.id ?? null,
       dialogueId: dialogueId.value,
       messages: safeMessages,
       generatedTracks: safeTracks,
       lastResponse: lastResponse.value,
       timestamp: Date.now()
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+    localStorage.setItem(getStorageKey(), JSON.stringify(sessionData));
   } catch (e) {
     // Best-effort persistence; should not break core generation flow.
     console.warn("保存会话到本地失败:", e);
@@ -270,14 +291,33 @@ watch([messages, generatedTracks, dialogueId, lastResponse], () => {
 }, { deep: true });
 
 const restoreSessionFromStorage = () => {
-  const saved = localStorage.getItem(STORAGE_KEY);
+  // 游客不恢复：每次进入都是新的界面
+  if (!auth?.isLoggedIn) return false;
+
+  // 清理旧版本全局 key，避免串号（v1 没有用户隔离）
+  try {
+    localStorage.removeItem("latest_music_generation_session");
+  } catch {
+    // ignore
+  }
+
+  const saved = localStorage.getItem(getStorageKey());
   if (!saved) return false;
 
   try {
     const data = JSON.parse(saved);
+    // 安全校验：必须是当前用户自己的会话
+    if ((data?.owner_user_id ?? null) !== (auth?.user?.id ?? null)) {
+      try {
+        localStorage.removeItem(getStorageKey());
+      } catch {
+        // ignore
+      }
+      return false;
+    }
     // 只恢复 24 小时内的会话，防止数据过旧
     if (Date.now() - data.timestamp > 86400000) {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(getStorageKey());
       return false;
     }
 
@@ -317,6 +357,34 @@ const restoreSessionFromStorage = () => {
     return false;
   }
 };
+
+const resetSessionState = () => {
+  // 清理生成中的轮询（避免账号切换后继续轮询旧任务）
+  try {
+    generatedTracks.value.forEach(t => {
+      if (t && t._pollingTimer) clearInterval(t._pollingTimer);
+    });
+  } catch {
+    // ignore
+  }
+  dialogueId.value = null;
+  messages.value = [];
+  generatedTracks.value = [];
+  lastResponse.value = null;
+  error.value = "";
+};
+
+// 账号切换时：不允许串号，直接重置并恢复当前用户自己的会话
+watch(
+  () => (auth?.isLoggedIn ? auth?.user?.id : null),
+  () => {
+    resetSessionState();
+    // 若有 query.dialogueId，则优先加载历史（保持原逻辑）
+    if (route.query.dialogueId) return;
+    const restored = restoreSessionFromStorage();
+    if (restored) scrollToBottom();
+  }
+);
 
 const pollTaskStatus = async (taskId, tempId) => {
   // 防止重复轮询同一个 taskId
@@ -960,74 +1028,119 @@ const addToWorks = async track => {
   background: transparent;
   border: none;
   color: #f1f5f9;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.6;
   resize: none;
-  min-height: 60px;
-  max-height: 150px;
+  min-height: 80px;
+  max-height: 200px;
   outline: none;
   padding: 0;
-  padding-right: 100px;
+  margin-bottom: 8px;
+}
+
+.chat-input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
 }
 
 .mode-row {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
-  gap: 8px;
-  padding-right: 100px; /* 给右下角按钮留空间 */
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .mode-chip {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: #cbd5e1;
-  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 6px 16px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mode-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .mode-chip.active {
-  border-color: rgba(59, 130, 246, 0.6);
-  background: rgba(59, 130, 246, 0.18);
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.imitate-chip {
+  border-style: dashed;
   color: #93c5fd;
 }
 
+.imitate-chip:hover {
+  border-style: solid;
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
 .mode-chip:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.lyrics-container {
-  margin-top: 10px;
-  padding-right: 100px; /* 给右下角按钮留空间 */
+.lyrics-section {
+  margin-top: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.section-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .lyrics-input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  border: none;
   color: #e2e8f0;
-  border-radius: 10px;
-  padding: 10px 12px;
+  padding: 0;
   font-size: 13px;
+  line-height: 1.6;
   resize: vertical;
-  min-height: 70px;
+  min-height: 80px;
   outline: none;
 }
 
-.lyrics-input:focus {
-  border-color: rgba(59, 130, 246, 0.5);
+.lyrics-input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
 }
 
 .input-actions {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
+  bottom: 12px;
+  right: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 /* Inspiration Chips */

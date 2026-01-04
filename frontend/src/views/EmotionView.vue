@@ -142,12 +142,19 @@ const analysisResult = ref(null);
 const historyMode = ref(false);
 
 // -------- 持久化（仿音乐生成页：离开再回来仍可继续/可回显）--------
-const EMOTION_SESSION_KEY = "emotion_session_v1";
+// 注意：必须按用户隔离，避免“游客/其他账号”看到上一位用户的分析进度
+const BASE_EMOTION_SESSION_KEY = "emotion_session_v2";
 const EMOTION_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const currentTaskId = ref("");
 const currentAnalysisId = ref(null);
 let emotionPollTimer = null;
 let destroyed = false;
+
+const getEmotionSessionKey = () => {
+  const uid = auth?.user?.id;
+  if (!auth?.isLoggedIn || !uid) return `${BASE_EMOTION_SESSION_KEY}:guest`;
+  return `${BASE_EMOTION_SESSION_KEY}:user:${uid}`;
+};
 
 // demoMode: 只有在有真实分析结果时才为 false，分析等待阶段继续显示 demo
 const demoMode = computed(() => !analysisResult.value);
@@ -252,16 +259,28 @@ const showToast = (message, type = "success") => {
 
 const clearEmotionSession = () => {
   try {
-    localStorage.removeItem(EMOTION_SESSION_KEY);
+    localStorage.removeItem(getEmotionSessionKey());
+    // 清理旧版本全局 key，避免串号（v1 没有用户隔离）
+    localStorage.removeItem("emotion_session_v1");
   } catch (e) {
     // ignore
   }
 };
 
 const saveEmotionSession = () => {
+  // 游客不做持久化：每次进入都应该是新的界面
+  if (!auth?.isLoggedIn) {
+    try {
+      localStorage.removeItem(`${BASE_EMOTION_SESSION_KEY}:guest`);
+    } catch {
+      // ignore
+    }
+    return;
+  }
   if (historyMode.value) return;
   const payload = {
     ts: Date.now(),
+    owner_user_id: auth?.user?.id ?? null,
     taskId: currentTaskId.value || "",
     analysisId: currentAnalysisId.value || null,
     audioUrl: audioUrl.value || "",
@@ -270,7 +289,7 @@ const saveEmotionSession = () => {
     progress: Number(progressPercent.value) || 0
   };
   try {
-    localStorage.setItem(EMOTION_SESSION_KEY, JSON.stringify(payload));
+    localStorage.setItem(getEmotionSessionKey(), JSON.stringify(payload));
   } catch (e) {
     // ignore
   }
@@ -1559,9 +1578,13 @@ const pollEmotionTaskStatus = async (taskId) => {
 
 const restoreEmotionSession = async () => {
   if (historyMode.value) return;
+  // 游客不恢复：每次进入都是新的界面
+  if (!auth?.isLoggedIn) return;
   let raw = null;
   try {
-    raw = localStorage.getItem(EMOTION_SESSION_KEY);
+    // 清理旧版本全局 key，避免串号（v1 没有用户隔离）
+    localStorage.removeItem("emotion_session_v1");
+    raw = localStorage.getItem(getEmotionSessionKey());
   } catch (e) {
     raw = null;
   }
@@ -1571,6 +1594,12 @@ const restoreEmotionSession = async () => {
   try {
     data = JSON.parse(raw);
   } catch (e) {
+    clearEmotionSession();
+    return;
+  }
+
+  // 安全校验：必须是当前用户自己的会话
+  if ((data?.owner_user_id ?? null) !== (auth?.user?.id ?? null)) {
     clearEmotionSession();
     return;
   }
@@ -1596,6 +1625,28 @@ const restoreEmotionSession = async () => {
     startProgress();
     await pollEmotionTaskStatus(currentTaskId.value);
   }
+};
+
+const resetEmotionState = () => {
+  stopEmotionPolling();
+  resetProgress();
+  currentTaskId.value = "";
+  currentAnalysisId.value = null;
+  selectedFile.value = null;
+  if (audioUrl.value && audioUrl.value.startsWith("blob:")) {
+    try {
+      URL.revokeObjectURL(audioUrl.value);
+    } catch {
+      // ignore
+    }
+  }
+  audioUrl.value = "";
+  statusText.value = "请选择一段音乐文件";
+  isAnalyzing.value = false;
+  summaryText.value = "";
+  analysisResult.value = null;
+  progressPercent.value = 0;
+  showProgress.value = false;
 };
 
 const onAnalyze = async () => {
@@ -1689,6 +1740,17 @@ onMounted(async () => {
 
 // 自动保存会话（仅非 history 模式）
 watch([currentTaskId, currentAnalysisId, audioUrl, statusText, isAnalyzing, progressPercent], () => saveEmotionSession());
+
+// 账号切换时：不允许串号，直接重置并恢复当前用户自己的分析进度
+watch(
+  () => (auth?.isLoggedIn ? auth?.user?.id : null),
+  async () => {
+    // history 模式由 query 控制，不参与会话恢复
+    if (historyMode.value) return;
+    resetEmotionState();
+    await restoreEmotionSession();
+  }
+);
 
 watch(
   demoMode,

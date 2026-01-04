@@ -16,11 +16,18 @@
       </div>
     </div>
     <div class="work-actions">
-      <button class="action-btn action-primary" type="button" @click="$emit('publish', item)">
+      <button 
+        class="action-btn" 
+        :class="item.status === 'published' ? 'action-disabled' : 'action-primary'"
+        type="button" 
+        :disabled="item.status === 'published'"
+        @click="$emit('publish', item)"
+      >
         <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" v-if="item.status !== 'published'"/>
+          <path d="M20 6L9 17l-5-5" v-else/>
         </svg>
-        <span>发布</span>
+        <span>{{ item.status === 'published' ? '已发布' : '发布' }}</span>
       </button>
       <button class="action-btn action-text" type="button" @click="$emit('edit', item)">
         <span>修改名称</span>
@@ -258,6 +265,14 @@ const metaLine = computed(() => {
   border-color: rgba(59, 130, 246, 0.3);
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.1));
   color: #93c5fd;
+}
+
+.action-disabled {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  cursor: default !important;
+  pointer-events: none;
 }
 
 .action-primary:hover {

@@ -241,11 +241,12 @@ const submitPublish = async () => {
         title: form.title,
         description: form.description,
         visibility: form.visibility,
-        cover_url: form.cover_url,
+        cover_url: form.cover_url || null, // 明确传递 cover_url
         status: "published"
       });
     }
     closeModal();
+    showToast(modalMode.value === "rename" ? "修改成功" : "发布成功");
   } catch (err) {
     error.value = err?.message || "保存失败";
   } finally {
