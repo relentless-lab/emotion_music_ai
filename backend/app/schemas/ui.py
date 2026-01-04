@@ -26,6 +26,7 @@ class ClientConfig(BaseModel):
 class HotSongItem(BaseModel):
     id: int
     title: str
+    author_name: Optional[str] = None
     cover_url: Optional[str] = None
     audio_url: Optional[str] = None
     like_count: int = 0

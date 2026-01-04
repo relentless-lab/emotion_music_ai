@@ -71,7 +71,7 @@ def _format_followers(n: int | None) -> str:
     summary="Homepage hot songs (windowed, weighted by likes/plays)",
 )
 async def get_hot_songs(
-    limit: int = Query(default=9, ge=1, le=50),
+    limit: int = Query(default=8, ge=1, le=50),
     window_days: int = Query(default=3, ge=1, le=30),
     db: Session = Depends(get_db),
 ) -> list[HotSongItem]:
@@ -106,7 +106,7 @@ async def get_hot_songs(
             func.coalesce(likes_sub.c.recent_likes, 0).label("recent_likes"),
             func.coalesce(plays_sub.c.recent_plays, 0).label("recent_plays"),
         )
-        .options(joinedload(Work.music_file))
+        .options(joinedload(Work.music_file), joinedload(Work.user))
         .outerjoin(likes_sub, likes_sub.c.work_id == Work.id)
         .outerjoin(plays_sub, plays_sub.c.work_id == Work.id)
         .filter(Work.status == WorkStatus.published, Work.visibility == WorkVisibility.public)
@@ -137,6 +137,7 @@ async def get_hot_songs(
             HotSongItem(
                 id=w.id,
                 title=w.title,
+                author_name=w.user.username if w.user else "AI Composer",
                 cover_url=resolve_cover_url(w.cover_url),
                 audio_url=audio_url,
                 like_count=int(w.like_count or 0),

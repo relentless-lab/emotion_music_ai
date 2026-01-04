@@ -130,7 +130,7 @@
         </div>
         <div class="songs-grid">
           <SongImageCard 
-            v-for="song in songs.slice(0, 9)" 
+            v-for="song in songs.slice(0, 8)" 
             :key="song.id" 
             :song="song" 
             @play="playHotSong"
@@ -187,6 +187,21 @@ const auth = useAuthStore();
 const ui = useUiStore();
 const router = useRouter();
 const player = usePlayerStore();
+
+// Convert backend-returned relative URLs (/static, /media, /uploads) to absolute URLs
+// so HomeView works in dev / when VITE_API_BASE_URL is set (frontend-backend not same-origin).
+const API_BASE_URL = ((import.meta.env.VITE_API_BASE_URL || "").trim()
+  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin))
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
+
+const toAbsoluteUrl = url => {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("data:") || url.startsWith("blob:")) return url;
+  const base = API_BASE_URL || window.location.origin;
+  const fileBase = base.replace(/\/api$/, "");
+  return url.startsWith("/") ? `${fileBase}${url}` : `${fileBase}/${url}`;
+};
 
 const loginForm = reactive({
   username: "",
@@ -361,18 +376,19 @@ const gotoSongDetail = song => {
 
 const loadHotSongs = async () => {
   try {
-    const res = await fetchHotSongs({ limit: 9, window_days: 3 });
+    const res = await fetchHotSongs({ limit: 8, window_days: 3 });
     if (Array.isArray(res) && res.length) {
       songs.value = res.map(item => ({
         id: item.id,
         title: item.title,
+        authorName: item.author_name || "AI Composer",
         cover_url: item.cover_url || "",
-        coverImage: item.cover_url || "",
+        coverImage: toAbsoluteUrl(item.cover_url || ""),
         play_count: item.play_count ?? 0,
         playCount: item.play_count ?? 0,
         like_count: item.like_count ?? 0,
         audio_url: item.audio_url || "",
-        url: item.audio_url || "",
+        url: toAbsoluteUrl(item.audio_url || ""),
         tags: item.tags || "",
         mood: item.mood || "",
         // 用于 player 上报过滤
@@ -394,7 +410,8 @@ const loadRecommendedCreators = async () => {
         name: item.name,
         followers: item.followers,
         handle: item.handle,
-        avatar: item.avatar || ""
+        // only normalize API results (placeholders should remain local assets)
+        avatar: toAbsoluteUrl(item.avatar || "")
       }));
     }
   } catch {
@@ -451,8 +468,7 @@ const songs = ref([
   {
     id: 1,
     title: "Used To Feel Like Home",
-    genres: ["acoustic pop", "indie folk", "cinematic"],
-    platform: "MusicGOO",
+    authorName: "Timotheus",
     mood: "delight",
     stats: { plays: "32K", likes: "11K", comments: "24" },
     coverImage: "/0a5e185b240483d80b5d5f5ebe1bb180.jpg"
@@ -460,8 +476,7 @@ const songs = ref([
   {
     id: 2,
     title: "Got A Move",
-    genres: ["R&B", "Soul", "Electronic", "Funk", "Synth"],
-    platform: "Cutting Edge",
+    authorName: "Brutus",
     mood: "upbeat",
     stats: { plays: "3.5K", likes: "89", comments: "8" },
     coverImage: "/100ad6d24236b7cf0a40af50d3f4fabb_720.jpg"
@@ -469,8 +484,7 @@ const songs = ref([
   {
     id: 3,
     title: "Summer Vibes",
-    genres: ["Pop", "Dance", "Electronic"],
-    platform: "MusicGOO",
+    authorName: "EvilTyremancer",
     mood: "happy",
     stats: { plays: "15K", likes: "3.2K", comments: "45" },
     coverImage: "/19463b41f316917fb2753e1cf97777ef.jpg"
@@ -478,8 +492,7 @@ const songs = ref([
   {
     id: 4,
     title: "Midnight Dreams",
-    genres: ["R&B", "Soul", "Lo-fi"],
-    platform: "ChillBeats",
+    authorName: "MusicMaster",
     mood: "relaxing",
     stats: { plays: "28K", likes: "8.7K", comments: "156" },
     coverImage: "/2472760da37e1ee42bdac2feebd844f4.jpg"
@@ -487,8 +500,7 @@ const songs = ref([
   {
     id: 5,
     title: "Electric Pulse",
-    genres: ["EDM", "House", "Electronic"],
-    platform: "BassDrop",
+    authorName: "BeatMaker",
     mood: "energetic",
     stats: { plays: "42K", likes: "15K", comments: "89" },
     coverImage: "/4109fd0848b160292c44659b397101c8_720.jpg"
@@ -496,8 +508,7 @@ const songs = ref([
   {
     id: 6,
     title: "Neon Nights",
-    genres: ["Synthwave", "Electronic"],
-    platform: "BassDrop",
+    authorName: "SoundWave",
     mood: "nostalgic",
     stats: { plays: "21K", likes: "6.3K", comments: "54" },
     coverImage: "/6168b0078172146bda06427cf6dcca6e.jpg"
@@ -505,8 +516,7 @@ const songs = ref([
   {
     id: 7,
     title: "Ocean Waves",
-    genres: ["Ambient", "Chill", "Electronic"],
-    platform: "MusicGOO",
+    authorName: "MelodyMaker",
     mood: "calm",
     stats: { plays: "18K", likes: "4.5K", comments: "67" },
     coverImage: "/9824df28ed03024e6fec7476b0215dcc_720.jpg"
@@ -514,20 +524,10 @@ const songs = ref([
   {
     id: 8,
     title: "City Lights",
-    genres: ["Synthpop", "Electronic", "Pop"],
-    platform: "Cutting Edge",
+    authorName: "RhythmKing",
     mood: "energetic",
     stats: { plays: "25K", likes: "7.2K", comments: "92" },
     coverImage: "/af4dbbe08c41f1f08c3f273a81c14bea_720.jpg"
-  },
-  {
-    id: 9,
-    title: "Sunset Drive",
-    genres: ["Indie", "Pop", "Rock"],
-    platform: "ChillBeats",
-    mood: "relaxing",
-    stats: { plays: "19K", likes: "5.8K", comments: "78" },
-    coverImage: "/ed3a34696e181f6a8ac58d1ec0ce63c2.jpg"
   }
 ]);
 
@@ -891,7 +891,7 @@ const creators = ref([
 
 .songs-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
   padding: 14px;
 }

@@ -55,6 +55,9 @@
         </svg>
         <span>{{ playCountLabel }}</span>
       </div>
+      <div v-if="authorName" class="author-badge" :title="authorName">
+        @{{ authorName }}
+      </div>
     </div>
     <div class="song-title" :title="title">{{ title }}</div>
   </div>
@@ -76,6 +79,10 @@ const props = defineProps({
     type: [Number, String],
     default: null
   },
+  author: {
+    type: String,
+    default: ""
+  },
   liked: {
     type: Boolean,
     default: undefined
@@ -90,6 +97,7 @@ const emit = defineEmits(["play", "like", "more", "card-click"]);
 
 const coverUrl = computed(() => props.cover || props.song.coverImage || props.song.cover_url || props.song.coverUrl || "");
 const title = computed(() => props.song.title || props.song.name || "未命名");
+const authorName = computed(() => props.author || props.song.authorName || props.song.author?.username || "");
 const titleInitial = computed(() => title.value.slice(0, 1).toUpperCase());
 const playCountLabel = computed(() => {
   const value = props.playCount ?? props.song.play_count ?? props.song.playCount ?? props.song.stats?.plays ?? 0;
@@ -240,6 +248,25 @@ const handleMore = () => emit("more", props.song);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+
+.author-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .song-title {
