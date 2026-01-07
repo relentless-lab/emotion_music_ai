@@ -2,8 +2,18 @@
   <header class="topbar">
     <div class="row row-top">
       <div class="top-left">
-        <div class="logo-title">音乐创作工作台</div>
-        <div class="top-subtitle">{{ currentNavName }} · 让每一次点击都长出一小段旋律</div>
+        <!-- Menu button shown when sidebar is hidden (mobile / large zoom) -->
+        <button class="menu-btn" type="button" title="菜单" @click="ui.toggleSidebar()">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6h16" />
+            <path d="M4 12h16" />
+            <path d="M4 18h16" />
+          </svg>
+        </button>
+        <div class="title-stack">
+          <div class="logo-title">音乐创作工作台</div>
+          <div class="top-subtitle">{{ currentNavName }} · 让每一次点击都长出一小段旋律</div>
+        </div>
       </div>
       <nav class="top-actions">
         <RouterLink to="/notifications" class="top-btn" title="通知">
@@ -148,8 +158,63 @@ const currentNavName = computed(() => {
 
 .top-left {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.title-stack {
+  display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+}
+
+.menu-btn {
+  display: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  cursor: pointer;
+  transition: all 0.16s ease-out;
+}
+
+.menu-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.4);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: rgba(255, 255, 255, 0.85);
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.logo-title {
+  flex-shrink: 0;
+}
+
+.top-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Show hamburger when sidebar is hidden */
+@media (max-width: 980px) {
+  .menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .logo-title {

@@ -16,6 +16,11 @@
       </div>
     </header>
 
+    <!-- 顶部 Toast：用于“保存成功/失败”等即时提示，避免提示在页面底部用户看不到 -->
+    <div v-if="toastMessage" class="toast" :class="toastType === 'error' ? 'toast-error' : 'toast-success'">
+      {{ toastMessage }}
+    </div>
+
     <section class="card base-info">
       <div class="card-title">
         <span>基本信息</span>
@@ -264,6 +269,9 @@ const isEditing = ref(false);
 const saving = ref(false);
 const errorMessage = ref("");
 const successMessage = ref("");
+const toastMessage = ref("");
+const toastType = ref("success"); // success | error
+let toastTimer = null;
 const originalSnapshot = ref(null);
 const avatarInputRef = ref(null);
 const avatarUploading = ref(false);
@@ -425,6 +433,7 @@ const startEdit = () => {
   successMessage.value = "";
   if (!isLoggedIn.value) {
     errorMessage.value = "请先登录后再编辑资料";
+    triggerToast(errorMessage.value, "error");
     return;
   }
   originalSnapshot.value = JSON.parse(JSON.stringify(form));
@@ -451,6 +460,7 @@ const saveProfile = async () => {
   if (!isEditing.value) return;
   if (!isLoggedIn.value) {
     errorMessage.value = "请登录后再保存";
+    triggerToast(errorMessage.value, "error");
     return;
   }
   errorMessage.value = "";
@@ -460,14 +470,17 @@ const saveProfile = async () => {
     const username = (form.name || "").trim();
     if (!username) {
       errorMessage.value = "用户名不能为空";
+      triggerToast(errorMessage.value, "error");
       return;
     }
     if (username.length < 3) {
       errorMessage.value = "用户名：至少 3 位";
+      triggerToast(errorMessage.value, "error");
       return;
     }
     if (username.length > 50) {
       errorMessage.value = "用户名：最多 50 位";
+      triggerToast(errorMessage.value, "error");
       return;
     }
     const payload = {
@@ -478,6 +491,7 @@ const saveProfile = async () => {
     const user = await auth.updateProfileAction(payload);
     fillForm(user);
     successMessage.value = "保存成功";
+    triggerToast(successMessage.value, "success");
     isEditing.value = false;
   } catch (err) {
     const msg = err?.message || "保存失败";
@@ -487,9 +501,21 @@ const saveProfile = async () => {
     } else {
       errorMessage.value = msg;
     }
+    triggerToast(errorMessage.value, "error");
   } finally {
     saving.value = false;
   }
+};
+
+const triggerToast = (message, type = "success", durationMs = 2200) => {
+  toastMessage.value = message || "";
+  toastType.value = type;
+  if (toastTimer) clearTimeout(toastTimer);
+  if (!toastMessage.value) return;
+  toastTimer = setTimeout(() => {
+    toastMessage.value = "";
+    toastTimer = null;
+  }, durationMs);
 };
 
 const handleWorkMore = item => {
@@ -1245,6 +1271,44 @@ h1 {
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.35);
   color: #bbf7d0;
+}
+
+.toast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  z-index: 10000;
+  animation: toast-in 0.18s ease;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.35);
+}
+
+.toast-success {
+  color: #071c12;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.96), rgba(52, 211, 153, 0.96));
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.toast-error {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(248, 113, 113, 0.9));
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 .modal-backdrop {

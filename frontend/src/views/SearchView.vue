@@ -522,8 +522,14 @@ onMounted(() => {
 
 .icon-btn {
   width: 34px;
+  padding: 0;
   display: grid;
   place-items: center;
+}
+
+.icon-btn > span {
+  display: block;
+  line-height: 1;
 }
 
 .cta.primary {

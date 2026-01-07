@@ -211,6 +211,13 @@ const toastType = ref("success");
 let toastTimer = null;
 const imitateFileInputRef = ref(null);
 
+// Prevent race conditions when users start a new conversation while an async generation request is in-flight.
+// Late responses from previous conversations must not overwrite the current dialogueId/UI.
+const sessionNonce = ref(0);
+const bumpSessionNonce = () => {
+  sessionNonce.value += 1;
+};
+
 const showToast = (message, type = "success", durationMs = 2200) => {
   toastMessage.value = message || "";
   toastType.value = type;
@@ -359,6 +366,7 @@ const restoreSessionFromStorage = () => {
 };
 
 const resetSessionState = () => {
+  bumpSessionNonce();
   // 清理生成中的轮询（避免账号切换后继续轮询旧任务）
   try {
     generatedTracks.value.forEach(t => {
@@ -475,9 +483,14 @@ onUnmounted(() => {
 });
 
 const loadDialogue = async id => {
+  bumpSessionNonce();
+  const loadNonce = sessionNonce.value;
   try {
     const data = await getDialogueDetail(id);
+    // If user switched conversations while this request was in-flight, ignore the stale response.
+    if (loadNonce !== sessionNonce.value) return;
     dialogueId.value = id;
+    const dialogueTitle = data?.dialogue_title || data?.dialogueTitle || "";
 
     const restoredMessages = [];
     const tracks = [];
@@ -500,7 +513,8 @@ const loadDialogue = async id => {
             ? {
                 id: msg.music_file_id || msg.id,
                 music_file_id: msg.music_file_id || msg.id,
-                title: msg.user_input || msg.reply || "AI 生成作品",
+                // 优先使用对话标题（后端可能已生成/保存 AI 歌名），兜底到用户输入
+                title: dialogueTitle || msg.user_input || msg.reply || "AI 生成作品",
                 artist: "AI Composer",
                 url: toAbsoluteUrl(msg.music_url),
                 duration: msg.duration_seconds ?? 0,
@@ -568,6 +582,7 @@ const appendPreset = (text) => {
 const applyPreset = text => (messageInput.value = text);
 
 const resetDialogue = () => {
+  bumpSessionNonce();
   dialogueId.value = null;
   messages.value = [];
   generatedTracks.value = [];
@@ -575,6 +590,8 @@ const resetDialogue = () => {
   error.value = "";
   messageInput.value = "";
   modelIndex.value = 0;
+  // Persist cleared session so navigating away/back won't resurrect the previous in-progress chat.
+  saveSessionToStorage();
 };
 
 const addMessage = (role, text, meta = {}) => {
@@ -648,7 +665,8 @@ const normalizeResponse = payload => {
     ? {
         id: data.music_file_id || data.music_id || data.id || data.message_id || `${Date.now()}`,
         music_file_id: data.music_file_id || data.music_id || null,
-        title: data.user_input || data.message || data.dialogue_title || data.title || "AI 生成作品",
+        // 标题统一规则：优先后端生成标题（title/dialogue_title），再兜底用户输入
+        title: data.title || data.dialogue_title || data.user_input || data.message || "AI 生成作品",
         artist: "AI Composer",
         album: "",
         cover: data.cover_url ? toAbsoluteUrl(data.cover_url) : "",
@@ -672,6 +690,7 @@ const normalizeResponse = payload => {
 };
 
 const sendMessage = async () => {
+  const requestNonce = sessionNonce.value;
   const text = messageInput.value.trim();
   if (!text) {
     error.value = "请先输入要生成的描述";
@@ -730,6 +749,10 @@ const sendMessage = async () => {
 
     // 4) 提交异步生成任务 (chatWithDialogueAsync)
     const res = await chatWithDialogueAsync(body);
+    // If user started a new conversation while we were waiting, ignore this late response.
+    if (requestNonce !== sessionNonce.value) {
+      return;
+    }
     const taskId = res.task_id;
     dialogueId.value = res.dialogue_id;
 

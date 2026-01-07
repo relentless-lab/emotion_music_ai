@@ -13,19 +13,6 @@
           <div class="track-title">{{ currentTrack?.title ?? "未选择歌曲" }}</div>
           <div class="track-artist">{{ currentTrack?.artist ?? "AI Composer" }}</div>
         </div>
-        <button
-          class="like-btn"
-          :class="{ active: isLiked }"
-          :title="isLiked ? '取消收藏' : '收藏'"
-          @click="toggleLike"
-        >
-          <svg v-if="isLiked" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-          </svg>
-        </button>
       </div>
 
       <!-- 中央：播放控制区 -->
@@ -143,10 +130,6 @@ const repeatLabel = computed(() => {
   if (player.repeatMode === "all") return "列表循环";
   return "不循环";
 });
-const isLiked = computed(() => {
-  if (!currentTrack.value) return false;
-  return player.likedTrackIds.includes(currentTrack.value.id);
-});
 
 const coverStyle = computed(() => {
   if (currentTrack.value?.cover) {
@@ -199,10 +182,6 @@ const onVolumeChange = (event) => {
   player.setVolume(value);
 };
 
-const toggleLike = () => {
-  if (!currentTrack.value) return;
-  player.toggleLike(currentTrack.value.id);
-};
 
 onMounted(() => {
   player.initAudio();
@@ -263,8 +242,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 14px;
+  /* Long titles should never push other controls out of place */
+  flex: 0 1 360px;
   min-width: 240px;
-  flex-shrink: 0;
+  max-width: 360px;
+  min-width: 0;
 }
 
 .cover-wrapper {
@@ -348,35 +330,7 @@ onMounted(() => {
   line-height: 1.3;
 }
 
-.like-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--player-border);
-  background: var(--player-glass);
-  color: var(--player-text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.like-btn:hover {
-  transform: scale(1.1);
-  border-color: rgba(99, 102, 241, 0.5);
-  background: rgba(99, 102, 241, 0.1);
-  color: #f472b6;
-  box-shadow: 0 0 12px rgba(244, 114, 182, 0.3);
-}
-
-.like-btn.active {
-  color: #f472b6;
-  border-color: rgba(244, 114, 182, 0.4);
-  background: rgba(244, 114, 182, 0.15);
-  box-shadow: 0 0 16px rgba(244, 114, 182, 0.25);
-}
+/* 播放栏“收藏”功能后端未实现：已移除按钮，避免误导用户 */
 
 /* 中央：播放控制区 */
 .player-center {
@@ -659,6 +613,8 @@ onMounted(() => {
   
   .player-left {
     min-width: 200px;
+    max-width: 300px;
+    flex-basis: 300px;
   }
   
   .player-right {

@@ -169,6 +169,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  /* Allow ellipsis inside grid/flex to work correctly */
+  min-width: 0;
 }
 
 .info h2 {
@@ -176,6 +178,9 @@ onMounted(() => {
   font-size: 18px;
   font-weight: 800;
   color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .author {

@@ -45,12 +45,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useHistoryStore } from "@/stores/history";
+import { useAuthStore } from "@/stores/auth";
 import HistoryItem from "@/components/HistoryItem.vue";
 
 const historyStore = useHistoryStore();
+const auth = useAuthStore();
 const { items, loading, error } = storeToRefs(historyStore);
 
 const historyList = computed(() => items.value || []);
@@ -74,8 +76,19 @@ const filteredList = computed(() => {
 const refresh = () => historyStore.loadHistory();
 
 onMounted(() => {
+  historyStore.syncScope();
   refresh();
 });
+
+// 退出登录 / 切换账号后：立即清空历史列表，避免计数残留（7/1 等）
+watch(
+  () => auth.token,
+  token => {
+    // token 变化（登录/退出）时都同步 scope；退出时会强制清空 items，使 badge 归零
+    historyStore.syncScope();
+    if (token) refresh();
+  }
+);
 
 </script>
 

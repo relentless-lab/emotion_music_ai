@@ -16,6 +16,7 @@
         :to="item.path"
         class="nav-item"
         :class="{ active: route.path === item.path }"
+        @click="ui.closeSidebar()"
       >
         <div class="nav-icon">
           <span>{{ item.icon }}</span>
@@ -31,8 +32,10 @@
 
 <script setup>
 import { useRoute } from "vue-router";
+import { useUiStore } from "@/stores/ui";
 
 const route = useRoute();
+const ui = useUiStore();
 
 const sidebarItems = [
   { key: "home", label: "首页", icon: "🏠", path: "/" },
@@ -45,13 +48,20 @@ const sidebarItems = [
 
 <style scoped>
 .sidebar {
-  width: 168px;
+  width: var(--sidebar-width, 168px);
   background: rgba(3, 7, 20, 0.96);
   border-right: 1px solid rgba(255, 255, 255, 0.04);
   padding: 20px 10px 20px 6px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* When used inside the drawer (mobile / large zoom), let it fill the drawer width. */
+@media (max-width: 980px) {
+  .sidebar {
+    width: 100%;
+  }
 }
 
 .logo {

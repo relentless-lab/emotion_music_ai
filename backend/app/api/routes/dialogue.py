@@ -126,7 +126,7 @@ def _background_chat_and_generate(
     payload: DialogueMessageRequest,
     user_id: int,
     dialogue_id: int,
-    existing_count: int
+    message_id: int | None,
 ):
     """Background task to handle long-running music generation."""
     db = SessionLocal()
@@ -141,9 +141,19 @@ def _background_chat_and_generate(
         # Re-fetch objects in this session
         current_user = db.query(User).filter(User.id == user_id).first()
         dialogue = db.query(Dialogue).filter(Dialogue.id == dialogue_id).first()
+        placeholder_message = None
+        if message_id:
+            placeholder_message = (
+                db.query(DialogueMessage)
+                .filter(DialogueMessage.id == message_id, DialogueMessage.dialogue_id == dialogue_id)
+                .first()
+            )
         
         if not current_user or not dialogue:
             task_service.fail_task(db, task_id, "User or Dialogue not found")
+            return
+        if message_id and not placeholder_message:
+            task_service.fail_task(db, task_id, "DialogueMessage not found")
             return
 
         reply_text = f"收到你的描述：{payload.message}。我为你生成了一段对应氛围的音乐，请试听。"
@@ -232,18 +242,31 @@ def _background_chat_and_generate(
         )
         db.add(music_file)
 
-        message = DialogueMessage(
-            dialogue=dialogue,
-            music_file=music_file,
-            user_input_text=payload.message,
-            system_reply_text=reply_text,
-            message_order=existing_count + 1,
-        )
+        # Prefer updating the placeholder message created at task submission time.
+        # This ensures History can show "生成中..." immediately instead of being empty.
+        if placeholder_message is None:
+            existing_count = db.query(DialogueMessage).filter(DialogueMessage.dialogue_id == dialogue.id).count()
+            message = DialogueMessage(
+                dialogue=dialogue,
+                user_input_text=payload.message,
+                system_reply_text=reply_text,
+                message_order=existing_count + 1,
+            )
+        else:
+            message = placeholder_message
+            message.user_input_text = payload.message
+            message.system_reply_text = reply_text
+
+        message.music_file = music_file
         db.add(message)
 
-        dialogue.message_count = existing_count + 1
         dialogue.updated_at = datetime.utcnow()
         current_user.total_generations = (current_user.total_generations or 0) + 1
+        # Ensure message_count not decreased
+        try:
+            dialogue.message_count = max(int(dialogue.message_count or 0), int(message.message_order or 0))
+        except Exception:
+            pass
         
         try:
             db.commit()
@@ -282,6 +305,27 @@ def _background_chat_and_generate(
 
     except Exception as exc:
         print(f"[dialogue/background] Critical error: {exc}")
+        # Best-effort: update placeholder message so History doesn't look empty.
+        try:
+            if message_id:
+                try:
+                    _ensure_db_connection(db)
+                except Exception:
+                    pass
+                msg = (
+                    db.query(DialogueMessage)
+                    .filter(DialogueMessage.id == message_id, DialogueMessage.dialogue_id == dialogue_id)
+                    .first()
+                )
+                if msg:
+                    msg.system_reply_text = f"生成失败：{exc}"
+                    db.add(msg)
+                    db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
         # Best-effort: task 标记失败（即使当前连接已断开，也尝试用新连接写回）
         try:
             try:
@@ -339,10 +383,27 @@ async def chat_async(
     except Exception:
         pass
 
+    # Create a placeholder dialogue message immediately so History is not empty while generating.
+    placeholder = DialogueMessage(
+        dialogue_id=dialogue.id,
+        user_input_text=payload.message,
+        system_reply_text="正在为您精心编排旋律，请稍候...",
+        message_order=existing_count + 1,
+    )
+    try:
+        dialogue.message_count = max(int(dialogue.message_count or 0), existing_count + 1)
+    except Exception:
+        dialogue.message_count = existing_count + 1
+    dialogue.updated_at = datetime.utcnow()
+    db.add(placeholder)
+    db.add(dialogue)
+    db.commit()
+    db.refresh(placeholder)
+
     # Dispatch background task
     background_tasks.add_task(
         _background_chat_and_generate,
-        task.id, payload, current_user.id, dialogue.id, existing_count
+        task.id, payload, current_user.id, dialogue.id, placeholder.id
     )
 
     return DialogueTaskCreateResponse(
