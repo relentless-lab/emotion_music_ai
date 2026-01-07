@@ -633,8 +633,9 @@ const loadDialogue = async id => {
       return !(p && completedPrompts.includes(p));
     });
     stillPending.forEach(t => {
+      const cardId = t.taskId ? `task:${t.taskId}` : (t.tempId ? `temp:${t.tempId}` : `pending:${Date.now()}`);
       tracks.push({
-        id: t.taskId ? `task:${t.taskId}` : (t.tempId ? `temp:${t.tempId}` : `pending:${Date.now()}`),
+        id: cardId,
         music_file_id: null,
         title: t.title || (t.prompt ? `${t.prompt}`.slice(0, 20) + (t.prompt.length > 20 ? "..." : "") : "AI 生成作品"),
         artist: "AI Composer",
@@ -653,6 +654,13 @@ const loadDialogue = async id => {
     messages.value = restoredMessages;
     generatedTracks.value = [];
     tracks.forEach((track, idx) => addTrack(track, idx + 1, track.createdAt));
+
+    // Restart polling for any pending tasks so the card can transition to "ready" without waiting for a refresh.
+    generatedTracks.value.forEach(t => {
+      if (t?.status === "generating" && t?.taskId) {
+        pollTaskStatus(t.taskId, t.id);
+      }
+    });
     
     // 自动滚动到底部
     scrollToBottom();
@@ -876,21 +884,38 @@ const sendMessage = async () => {
 
     // 4) 提交异步生成任务 (chatWithDialogueAsync)
     const res = await chatWithDialogueAsync(body);
-    // If user started a new conversation while we were waiting, ignore this late response.
+    const taskId = res.task_id;
+    const resDialogueId = res.dialogue_id;
+
+    // Always bind the pending cache to the returned dialogue/task so History can display it,
+    // even if the user already started a new conversation (nonce changed).
+    upsertPendingTask({
+      dialogueId: resDialogueId,
+      draftNonce: requestNonce,
+      tempId,
+      taskId,
+      prompt: text,
+      title: pendingTrack.title,
+      cover: (generatedTracks.value.find(t => t.id === tempId)?.cover) || null,
+      createdAt: now,
+      status: "generating"
+    });
+
+    // If user started a new conversation while we were waiting, do NOT mutate current UI state.
     if (requestNonce !== sessionNonce.value) {
       return;
     }
-    const taskId = res.task_id;
-    dialogueId.value = res.dialogue_id;
+
+    dialogueId.value = resDialogueId;
 
     // 更新本地 pending 记录，存入真正的 taskId
     const track = generatedTracks.value.find(t => t.id === tempId);
     if (track) {
       track.taskId = taskId;
     }
-    // Now that we have dialogueId/taskId, bind the pending task to this dialogue.
+    // Ensure pending cache is consistent with the final UI state (cover may have arrived).
     upsertPendingTask({
-      dialogueId: res.dialogue_id,
+      dialogueId: resDialogueId,
       draftNonce: requestNonce,
       tempId,
       taskId,
