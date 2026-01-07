@@ -20,7 +20,8 @@
       </div>
     </section>
 
-    <div v-if="showModal" class="modal-backdrop" @click.self="closeModal">
+    <!-- 不使用 @click.self 关闭：避免用户拖拽选择文本时误触导致弹窗消失 -->
+    <div v-if="showModal" class="modal-backdrop">
       <div class="modal">
         <div class="modal-header">
           <h3>{{ modalTitle }}</h3>
