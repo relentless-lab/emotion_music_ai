@@ -185,7 +185,7 @@ const loadHotSongs = async () => {
 
 const loadRecommendedCreators = async () => {
   try {
-    const res = await fetchRecommendedCreators({ limit: 7 });
+    const res = await fetchRecommendedCreators({ limit: 6 });
     if (Array.isArray(res) && res.length) {
       creators.value = res.map(item => ({
         id: item.id,

@@ -201,9 +201,9 @@ onMounted(() => {
 
 .sticky-player {
   position: fixed;
-  left: 20px;
-  right: 20px;
-  bottom: 16px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 30;
   pointer-events: none;
 }
@@ -214,27 +214,20 @@ onMounted(() => {
   gap: 24px;
   background: linear-gradient(
     135deg,
-    rgba(8, 15, 30, 0.85) 0%,
-    rgba(15, 23, 42, 0.9) 100%
+    rgba(8, 15, 30, 0.95) 0%,
+    rgba(15, 23, 42, 0.98) 100%
   );
-  border: 1px solid var(--player-border);
-  border-radius: 20px;
-  box-shadow: 
-    0 20px 60px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(99, 102, 241, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  padding: 16px 24px;
-  backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid var(--player-border);
+  border-radius: 0;
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.4);
+  padding: 12px 24px;
+  backdrop-filter: blur(24px) saturate(180%);
   pointer-events: auto;
-  transition: box-shadow 0.3s ease;
+  transition: background 0.3s ease;
 }
 
 .player-shell:hover {
-  box-shadow: 
-    0 25px 70px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(99, 102, 241, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 0 40px rgba(99, 102, 241, 0.15);
+  background: rgba(10, 18, 35, 0.98);
 }
 
 /* 左侧：歌曲信息区 */

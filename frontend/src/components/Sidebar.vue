@@ -49,6 +49,7 @@ const sidebarItems = [
 <style scoped>
 .sidebar {
   width: var(--sidebar-width, 168px);
+  height: 100%;
   background: rgba(3, 7, 20, 0.96);
   border-right: 1px solid rgba(255, 255, 255, 0.04);
   padding: 20px 10px 20px 6px;

@@ -218,6 +218,80 @@ const bumpSessionNonce = () => {
   sessionNonce.value += 1;
 };
 
+// --- Pending generation tasks cache (per dialogue) ---
+// Goal: if a generation is still in progress and the user creates a new dialogue,
+// opening the previous dialogue from History should still show the pending card (cover/prompt/status).
+const PENDING_TASKS_KEY = "pending_music_generation_tasks_v1";
+const getPendingTasksStorageKey = () => {
+  const uid = auth?.user?.id;
+  if (!auth?.isLoggedIn || !uid) return null;
+  return `${PENDING_TASKS_KEY}:user:${uid}`;
+};
+
+const loadPendingTasks = () => {
+  const key = getPendingTasksStorageKey();
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+
+const savePendingTasks = (tasks) => {
+  const key = getPendingTasksStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(Array.isArray(tasks) ? tasks : []));
+  } catch {
+    // ignore
+  }
+};
+
+const upsertPendingTask = (patch) => {
+  if (!auth?.isLoggedIn) return;
+  const tasks = loadPendingTasks();
+  const taskKey = patch?.taskId ? `task:${patch.taskId}` : null;
+  const tempKey = patch?.tempId ? `temp:${patch.tempId}` : null;
+  const draftKey = patch?.draftNonce !== undefined && patch?.draftNonce !== null ? `draft:${patch.draftNonce}` : null;
+
+  const idx = tasks.findIndex(t => {
+    if (taskKey && t?.taskId && `task:${t.taskId}` === taskKey) return true;
+    if (tempKey && t?.tempId && `temp:${t.tempId}` === tempKey && (draftKey ? t?.draftNonce === patch.draftNonce : true)) return true;
+    return false;
+  });
+
+  const next = {
+    ...(idx >= 0 ? tasks[idx] : {}),
+    ...patch,
+    updatedAt: Date.now()
+  };
+
+  if (idx >= 0) tasks[idx] = next;
+  else tasks.unshift(next);
+
+  // Keep the cache small
+  const trimmed = tasks.slice(0, 80);
+  savePendingTasks(trimmed);
+};
+
+const prunePendingTasksForDialogue = (dialogueIdToPrune, completedPrompts = []) => {
+  if (!auth?.isLoggedIn) return;
+  const tasks = loadPendingTasks();
+  const completed = new Set((completedPrompts || []).map(s => (s || "").trim()).filter(Boolean));
+  const next = tasks.filter(t => {
+    if (!t) return false;
+    if (t.dialogueId !== dialogueIdToPrune) return true;
+    const p = (t.prompt || "").trim();
+    // If server already has a completed message for this prompt, drop the pending entry to avoid duplicates.
+    if (p && completed.has(p)) return false;
+    return true;
+  });
+  if (next.length !== tasks.length) savePendingTasks(next);
+};
+
 const showToast = (message, type = "success", durationMs = 2200) => {
   toastMessage.value = message || "";
   toastType.value = type;
@@ -430,6 +504,12 @@ const pollTaskStatus = async (taskId, tempId) => {
           url: toAbsoluteUrl(result.url) || existingTrack.url || "",
           createdAt: result.created_at || existingTrack.createdAt || new Date().toISOString()
         };
+        // Once completed, drop the pending cache entry to avoid "generating" cards lingering in History.
+        try {
+          prunePendingTasksForDialogue(result.dialogue_id || dialogueId.value, [existingTrack.prompt || existingTrack.mood || ""]);
+        } catch {
+          // ignore
+        }
 
         // 同时更新聊天区域中的 AI 回复：用 pendingTrackId 精准定位这次生成的占位消息
         const msgIdx = messages.value.findIndex(
@@ -494,6 +574,7 @@ const loadDialogue = async id => {
 
     const restoredMessages = [];
     const tracks = [];
+    const completedPrompts = [];
     if (Array.isArray(data?.messages)) {
       data.messages.forEach(msg => {
         const created = msg.created_at || new Date().toISOString();
@@ -533,6 +614,7 @@ const loadDialogue = async id => {
           });
           
           if (musicData) {
+            if (msg.user_input) completedPrompts.push(msg.user_input);
             tracks.push({
               ...musicData,
               mood: msg.user_input || "",
@@ -542,6 +624,32 @@ const loadDialogue = async id => {
         }
       });
     }
+
+    // Merge "pending generation" cards for this dialogue (if any) so History opening isn't empty.
+    const pending = loadPendingTasks().filter(t => t?.dialogueId === id);
+    prunePendingTasksForDialogue(id, completedPrompts);
+    const stillPending = pending.filter(t => {
+      const p = (t?.prompt || "").trim();
+      return !(p && completedPrompts.includes(p));
+    });
+    stillPending.forEach(t => {
+      tracks.push({
+        id: t.taskId ? `task:${t.taskId}` : (t.tempId ? `temp:${t.tempId}` : `pending:${Date.now()}`),
+        music_file_id: null,
+        title: t.title || (t.prompt ? `${t.prompt}`.slice(0, 20) + (t.prompt.length > 20 ? "..." : "") : "AI 生成作品"),
+        artist: "AI Composer",
+        url: "",
+        duration: 0,
+        format: "wav",
+        cover: t.cover ? toAbsoluteUrl(t.cover) : "",
+        mood: t.prompt || "",
+        prompt: t.prompt || "",
+        status: "generating",
+        taskId: t.taskId || null,
+        createdAt: t.createdAt || new Date().toISOString()
+      });
+    });
+
     messages.value = restoredMessages;
     generatedTracks.value = [];
     tracks.forEach((track, idx) => addTrack(track, idx + 1, track.createdAt));
@@ -721,6 +829,19 @@ const sendMessage = async () => {
   };
   // 插入到列表顶部（参考 Suno 逻辑，最新生成的在最上面）
   generatedTracks.value = [pendingTrack, ...generatedTracks.value];
+  // Immediately persist pending task (even before we have dialogueId/taskId) so History can show it.
+  upsertPendingTask({
+    dialogueId: dialogueId.value || null,
+    draftNonce: requestNonce,
+    tempId,
+    taskId: null,
+    prompt: text,
+    title: pendingTrack.title,
+    cover: null,
+    createdAt: now,
+    status: "generating"
+  });
+  saveSessionToStorage();
 
   sending.value = true;
   error.value = "";
@@ -742,6 +863,12 @@ const sendMessage = async () => {
         if (track) {
           track.cover = toAbsoluteUrl(coverUrl);
         }
+        upsertPendingTask({
+          tempId,
+          draftNonce: requestNonce,
+          cover: coverUrl
+        });
+        saveSessionToStorage();
       })
       .catch((coverErr) => {
         console.error("封面先行生成失败:", coverErr);
@@ -761,6 +888,19 @@ const sendMessage = async () => {
     if (track) {
       track.taskId = taskId;
     }
+    // Now that we have dialogueId/taskId, bind the pending task to this dialogue.
+    upsertPendingTask({
+      dialogueId: res.dialogue_id,
+      draftNonce: requestNonce,
+      tempId,
+      taskId,
+      prompt: text,
+      title: track?.title || pendingTrack.title,
+      cover: track?.cover || null,
+      createdAt: now,
+      status: "generating"
+    });
+    saveSessionToStorage();
 
     // 5. 立即开启任务状态轮询
     pollTaskStatus(taskId, tempId);

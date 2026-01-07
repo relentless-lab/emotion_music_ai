@@ -157,7 +157,7 @@ async def get_hot_songs(
     summary="Homepage recommended creators",
 )
 async def get_recommended_creators(
-    limit: int = Query(default=7, ge=1, le=50),
+    limit: int = Query(default=6, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> list[RecommendedCreatorItem]:
