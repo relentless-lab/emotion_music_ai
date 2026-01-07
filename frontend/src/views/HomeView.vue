@@ -476,9 +476,15 @@ const creators = ref([
 
 .songs-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* Use minmax(0, 1fr) so long unbroken titles won't expand the grid columns */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 20px;
   padding: 14px;
+}
+
+/* Allow grid items to shrink below their min-content width (prevents long titles stretching cards) */
+.songs-grid > * {
+  min-width: 0;
 }
 
 .toast {

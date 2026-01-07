@@ -123,6 +123,8 @@ const handleMore = () => emit("more", props.song);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Important for CSS grid: allow card to shrink below min-content width */
+  min-width: 0;
 }
 
 .song-image-card:hover {

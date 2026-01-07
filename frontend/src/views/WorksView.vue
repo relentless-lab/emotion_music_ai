@@ -29,7 +29,7 @@
         <div class="modal-body">
           <label class="field">
             <span>作品名称</span>
-            <input v-model="form.title" placeholder="请输入作品名称" />
+            <input v-model="form.title" :maxlength="MAX_WORK_TITLE_LEN" placeholder="请输入作品名称" />
           </label>
           <template v-if="showPublishFields">
             <label class="field">
@@ -80,6 +80,7 @@ import { useAuthStore } from "@/stores/auth";
 import { uploadWorkCover } from "@/services/workApi";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const MAX_WORK_TITLE_LEN = 30;
 
 const worksStore = useWorksStore();
 const playerStore = usePlayerStore();
@@ -255,6 +256,10 @@ const submitPublish = async () => {
   if (!currentId.value) return;
   if (!form.title?.trim()) {
     error.value = "作品名称不能为空";
+    return;
+  }
+  if ((form.title || "").trim().length > MAX_WORK_TITLE_LEN) {
+    error.value = `作品名称最多 ${MAX_WORK_TITLE_LEN} 字`;
     return;
   }
   saving.value = true;

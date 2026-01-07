@@ -44,7 +44,7 @@
                 <span class="play-count">▶ {{ song.play_count || 0 }}</span>
               </div>
               <div class="song-info">
-                <div class="title">{{ song.title }}</div>
+                <div class="title" :title="song.title">{{ song.title }}</div>
                 <div class="meta">
                   <span>作者：{{ song.author_name }}</span>
                   <span>点赞 {{ song.like_count || 0 }}</span>
@@ -381,7 +381,8 @@ onMounted(() => {
 
 .song-row {
   display: grid;
-  grid-template-columns: 56px 1fr auto;
+  /* Use minmax(0, 1fr) so long titles won't push action buttons off-screen */
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   gap: 12px;
   padding: 10px 14px;
   border-radius: 12px;
@@ -424,9 +425,16 @@ onMounted(() => {
   font-size: 11px;
 }
 
+.song-info {
+  min-width: 0;
+}
+
 .song-info .title {
   font-weight: 700;
   margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .song-info .meta {
@@ -442,6 +450,7 @@ onMounted(() => {
   gap: 8px;
   opacity: 0;
   transition: opacity 0.16s ease;
+  flex-shrink: 0;
 }
 
 .row-actions.show {
