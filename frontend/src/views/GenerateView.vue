@@ -253,6 +253,11 @@ const savePendingTasks = (tasks) => {
 const upsertPendingTask = (patch) => {
   if (!auth?.isLoggedIn) return;
   const tasks = loadPendingTasks();
+  const normalizedPatch = {
+    ...patch,
+    // Normalize dialogueId to string for stable matching (route query is string, API may return number)
+    dialogueId: patch?.dialogueId !== undefined && patch?.dialogueId !== null ? String(patch.dialogueId) : patch?.dialogueId
+  };
   const taskKey = patch?.taskId ? `task:${patch.taskId}` : null;
   const tempKey = patch?.tempId ? `temp:${patch.tempId}` : null;
   const draftKey = patch?.draftNonce !== undefined && patch?.draftNonce !== null ? `draft:${patch.draftNonce}` : null;
@@ -265,7 +270,7 @@ const upsertPendingTask = (patch) => {
 
   const next = {
     ...(idx >= 0 ? tasks[idx] : {}),
-    ...patch,
+    ...normalizedPatch,
     updatedAt: Date.now()
   };
 
@@ -279,11 +284,12 @@ const upsertPendingTask = (patch) => {
 
 const prunePendingTasksForDialogue = (dialogueIdToPrune, completedPrompts = []) => {
   if (!auth?.isLoggedIn) return;
+  const scopeId = dialogueIdToPrune !== undefined && dialogueIdToPrune !== null ? String(dialogueIdToPrune) : dialogueIdToPrune;
   const tasks = loadPendingTasks();
   const completed = new Set((completedPrompts || []).map(s => (s || "").trim()).filter(Boolean));
   const next = tasks.filter(t => {
     if (!t) return false;
-    if (t.dialogueId !== dialogueIdToPrune) return true;
+    if ((t.dialogueId !== undefined && t.dialogueId !== null ? String(t.dialogueId) : t.dialogueId) !== scopeId) return true;
     const p = (t.prompt || "").trim();
     // If server already has a completed message for this prompt, drop the pending entry to avoid duplicates.
     if (p && completed.has(p)) return false;
@@ -565,6 +571,7 @@ onUnmounted(() => {
 const loadDialogue = async id => {
   bumpSessionNonce();
   const loadNonce = sessionNonce.value;
+  const idStr = id !== undefined && id !== null ? String(id) : id;
   try {
     const data = await getDialogueDetail(id);
     // If user switched conversations while this request was in-flight, ignore the stale response.
@@ -626,8 +633,8 @@ const loadDialogue = async id => {
     }
 
     // Merge "pending generation" cards for this dialogue (if any) so History opening isn't empty.
-    const pending = loadPendingTasks().filter(t => t?.dialogueId === id);
-    prunePendingTasksForDialogue(id, completedPrompts);
+    const pending = loadPendingTasks().filter(t => (t?.dialogueId !== undefined && t?.dialogueId !== null ? String(t.dialogueId) : t?.dialogueId) === idStr);
+    prunePendingTasksForDialogue(idStr, completedPrompts);
     const stillPending = pending.filter(t => {
       const p = (t?.prompt || "").trim();
       return !(p && completedPrompts.includes(p));
