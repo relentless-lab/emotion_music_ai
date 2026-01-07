@@ -69,9 +69,9 @@
         </div>
         <div class="field-grid">
           <div class="field">
-            <label>姓名</label>
+            <label>姓名/用户名</label>
             <template v-if="isEditing">
-              <input v-model="form.name" placeholder="请输入姓名" />
+              <input v-model="form.name" placeholder="请输入用户名" />
             </template>
             <div v-else class="field-value">{{ form.name || "未填写" }}</div>
           </div>
@@ -93,11 +93,10 @@
           </div>
           <div class="field span-2">
             <label>标签</label>
-            <template v-if="isEditing">
-              <input v-model="tagInput" placeholder="用逗号分隔标签，如：已实名,音乐创作者" />
-            </template>
-            <div v-else class="field-value tag-list">
-              <span v-if="displayTags.length" v-for="tag in displayTags" :key="tag" class="tag outline">{{ tag }}</span>
+            <div class="field-value tag-list">
+              <template v-if="displayTags.length">
+                <span v-for="tag in displayTags" :key="tag" class="tag outline">{{ tag }}</span>
+              </template>
               <span v-else class="muted">未设置标签</span>
             </div>
           </div>
@@ -276,7 +275,6 @@ const form = reactive({
   tags: []
 });
 
-const tagInput = ref("");
 const loadingWorks = ref(false);
 const publishedWorks = ref([]);
 const likedWorks = ref([]);
@@ -318,18 +316,11 @@ const listTitle = computed(() => {
   return "列表";
 });
 
-const parseTags = value =>
-  (value || "")
-    .split(",")
-    .map(item => item.trim())
-    .filter(Boolean);
-
 const resetForm = () => {
   form.name = "";
   form.email = "";
   form.bio = "";
   form.tags = [];
-  tagInput.value = "";
 };
 
 const currentAvatarUrl = computed(() => toAbsoluteUrl(auth.user?.avatar || ""));
@@ -417,7 +408,6 @@ const fillForm = user => {
   form.email = user.email || "";
   form.bio = user.bio || "";
   form.tags = Array.isArray(user.tags) ? user.tags : [];
-  tagInput.value = form.tags.join(",");
 };
 
 watch(
@@ -439,7 +429,6 @@ const startEdit = () => {
   }
   originalSnapshot.value = JSON.parse(JSON.stringify(form));
   isEditing.value = true;
-  tagInput.value = form.tags.join(",");
 };
 
 const cancelEdit = () => {
@@ -452,7 +441,6 @@ const cancelEdit = () => {
     form.email = snap.email || "";
     form.bio = snap.bio || "";
     form.tags = Array.isArray(snap.tags) ? snap.tags : [];
-    tagInput.value = form.tags.join(",");
   } else {
     fillForm(auth.user);
   }
@@ -468,20 +456,37 @@ const saveProfile = async () => {
   errorMessage.value = "";
   successMessage.value = "";
   saving.value = true;
-  form.tags = parseTags(tagInput.value);
   try {
+    const username = (form.name || "").trim();
+    if (!username) {
+      errorMessage.value = "用户名不能为空";
+      return;
+    }
+    if (username.length < 3) {
+      errorMessage.value = "用户名：至少 3 位";
+      return;
+    }
+    if (username.length > 50) {
+      errorMessage.value = "用户名：最多 50 位";
+      return;
+    }
     const payload = {
-      username: form.name,
-      email: form.email,
-      personal_profile: form.bio,
-      tags: form.tags
+      // 后端只支持更新 username / personal_profile / avatar
+      username,
+      personal_profile: form.bio
     };
     const user = await auth.updateProfileAction(payload);
     fillForm(user);
     successMessage.value = "保存成功";
     isEditing.value = false;
   } catch (err) {
-    errorMessage.value = err?.message || "保存失败";
+    const msg = err?.message || "保存失败";
+    // 明确提示用户名冲突
+    if (msg.includes("用户名已存在")) {
+      errorMessage.value = "用户名已存在，请更换一个";
+    } else {
+      errorMessage.value = msg;
+    }
   } finally {
     saving.value = false;
   }

@@ -5,13 +5,6 @@
         <h3 class="sidebar-title">生成列表</h3>
         <span class="track-count">{{ tracks.length }} 首作品</span>
       </div>
-      <div class="header-actions">
-        <button class="icon-btn" title="搜索">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-          </svg>
-        </button>
-      </div>
     </div>
 
     <div class="sidebar-content custom-scrollbar">
@@ -98,6 +91,25 @@ const handleAddToWorks = (track) => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* 右上角“搜索”图标（无后端功能）：
+   - 兼容旧版本模板里可能残留的按钮
+   - 兼容通过 ::before/::after 注入的图标
+   仅影响生成列表头部，不影响其它功能 */
+.sidebar-header::before,
+.sidebar-header::after {
+  content: none !important;
+  display: none !important;
+}
+
+.sidebar-header > button,
+.sidebar-header > .icon-btn,
+.sidebar-header > .search-btn,
+.sidebar-header .icon-btn,
+.sidebar-header .search-btn,
+.sidebar-header .search-icon {
+  display: none !important;
+}
+
 .sidebar-title {
   font-size: 16px;
   font-weight: 700;
@@ -109,31 +121,6 @@ const handleAddToWorks = (track) => {
   font-size: 12px;
   color: #64748b;
   margin-top: 4px;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.icon-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #f1f5f9;
-  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .sidebar-content {

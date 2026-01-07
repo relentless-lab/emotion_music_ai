@@ -9,6 +9,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     ProfileResponse,
     ProfileUpdateRequest,
@@ -248,3 +249,24 @@ async def delete_profile(
   db.delete(current_user)
   db.commit()
   
+
+@router.put("/account/password", summary="change current user password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+  # 校验当前密码
+  if not verify_password(payload.current_password, current_user.password_hash):
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前密码错误")
+
+  # 新旧密码不能相同
+  if payload.current_password == payload.new_password:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="新密码不能与原密码相同")
+
+  # 保存哈希
+  current_user.password_hash = hash_password(payload.new_password)
+  db.add(current_user)
+  db.commit()
+
+  return {"message": "已修改成功"}

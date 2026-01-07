@@ -4,11 +4,7 @@
       <div>
         <p class="eyebrow">账号中心</p>
         <h1>账户设置</h1>
-        <p class="muted">管理安全信息、通知偏好与隐私设置。</p>
-      </div>
-      <div class="header-actions">
-        <button class="ghost-btn">重置</button>
-        <button class="primary-btn">保存更改</button>
+        <p class="muted">管理您的安全信息与账户操作。</p>
       </div>
     </header>
 
@@ -19,63 +15,23 @@
       <div class="form-grid">
         <div class="field">
           <label>当前密码</label>
-          <input type="password" placeholder="请输入当前密码" />
+          <input v-model="securityForm.currentPassword" type="password" placeholder="请输入当前密码" />
         </div>
         <div class="field">
           <label>新密码</label>
-          <input type="password" placeholder="请输入新密码" />
+          <input v-model="securityForm.newPassword" type="password" placeholder="请输入新密码" />
         </div>
         <div class="field">
           <label>确认新密码</label>
-          <input type="password" placeholder="请再次输入新密码" />
+          <input v-model="securityForm.confirmPassword" type="password" placeholder="请再次输入新密码" />
         </div>
       </div>
       <div class="actions-row">
-        <button class="primary-btn">保存安全设置</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="card-title">
-        <span>通知设置</span>
-      </div>
-      <div class="list">
-        <label class="list-item">
-          <input type="checkbox" checked />
-          <span>邮件通知</span>
-        </label>
-        <label class="list-item">
-          <input type="checkbox" checked />
-          <span>推送通知</span>
-        </label>
-        <label class="list-item">
-          <input type="checkbox" checked />
-          <span>系统更新通知</span>
-        </label>
-        <label class="list-item">
-          <input type="checkbox" />
-          <span>促销活动通知</span>
-        </label>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="card-title">
-        <span>隐私设置</span>
-      </div>
-      <div class="list">
-        <label class="list-item">
-          <input type="radio" name="privacy" checked />
-          <span>公开：所有人可以看到我的作品</span>
-        </label>
-        <label class="list-item">
-          <input type="radio" name="privacy" />
-          <span>仅好友：只有获批的好友可查看我的作品</span>
-        </label>
-        <label class="list-item">
-          <input type="radio" name="privacy" />
-          <span>私密：只有我自己可以看到我的作品</span>
-        </label>
+        <button class="primary-btn" type="button" :disabled="savingSecurity" @click="handleChangePassword">
+          {{ savingSecurity ? "保存中..." : "保存安全设置" }}
+        </button>
+        <p v-if="securitySuccess" class="hint hint-success">{{ securitySuccess }}</p>
+        <p v-if="securityError" class="hint hint-error">{{ securityError }}</p>
       </div>
     </section>
 
@@ -84,7 +40,6 @@
         <span>账户操作</span>
       </div>
       <div class="danger-actions">
-        <button class="ghost-btn">导出数据备份</button>
         <button class="warn-btn" type="button" @click="handleLogout">退出登录</button>
         <button class="danger-btn" type="button" @click="handleDelete" :disabled="deleting">
           {{ deleting ? "删除中..." : "删除账户" }}
@@ -95,17 +50,68 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { changePassword } from "@/services/authApi";
 
 const auth = useAuthStore();
 const router = useRouter();
 const deleting = ref(false);
 
+const savingSecurity = ref(false);
+const securityError = ref("");
+const securitySuccess = ref("");
+const securityForm = reactive({
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: ""
+});
+
 const handleLogout = () => {
   auth.logout();
   router.push("/");
+};
+
+const handleChangePassword = async () => {
+  if (savingSecurity.value) return;
+  securityError.value = "";
+  securitySuccess.value = "";
+
+  const currentPassword = securityForm.currentPassword || "";
+  const newPassword = securityForm.newPassword || "";
+  const confirmPassword = securityForm.confirmPassword || "";
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    securityError.value = "请完整填写密码信息";
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    securityError.value = "两次输入的新密码不一致";
+    return;
+  }
+  if (newPassword === currentPassword) {
+    securityError.value = "新密码不能与原密码相同";
+    return;
+  }
+  if (newPassword.length < 6) {
+    securityError.value = "密码：至少 6 位";
+    return;
+  }
+
+  savingSecurity.value = true;
+  try {
+    await changePassword({ current_password: currentPassword, new_password: newPassword });
+    securitySuccess.value = "已修改成功";
+    // 清理输入，避免密码留在页面里
+    securityForm.currentPassword = "";
+    securityForm.newPassword = "";
+    securityForm.confirmPassword = "";
+  } catch (err) {
+    securityError.value = err?.message || "修改失败";
+  } finally {
+    savingSecurity.value = false;
+  }
 };
 
 const handleDelete = async () => {
@@ -133,9 +139,6 @@ const handleDelete = async () => {
 }
 
 .page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 18px 20px;
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(23, 37, 84, 0.4), rgba(8, 20, 46, 0.8));
@@ -159,11 +162,6 @@ h1 {
   margin-top: 6px;
   color: rgba(255, 255, 255, 0.6);
   font-size: 13px;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
 }
 
 .card {
@@ -218,24 +216,23 @@ h1 {
 
 .actions-row {
   margin-top: 10px;
-}
-
-.list {
-  display: grid;
-  gap: 10px;
-}
-
-.list-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.list-item input {
-  width: 16px;
-  height: 16px;
+.hint {
+  margin: 0;
+  font-size: 13px;
+}
+
+.hint-success {
+  color: rgba(16, 185, 129, 0.95);
+}
+
+.hint-error {
+  color: rgba(248, 113, 113, 0.95);
 }
 
 .danger-actions {
@@ -291,13 +288,7 @@ h1 {
 
 @media (max-width: 900px) {
   .page-header {
-    flex-direction: column;
-    align-items: flex-start;
     gap: 12px;
-  }
-
-  .header-actions {
-    width: 100%;
   }
 }
 </style>

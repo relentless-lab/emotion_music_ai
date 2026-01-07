@@ -34,3 +34,7 @@ export function uploadAvatar(file) {
 export function deleteAccount() {
   return api.delete("/api/account");
 }
+
+export function changePassword(payload) {
+  return api.put("/api/account/password", payload);
+}

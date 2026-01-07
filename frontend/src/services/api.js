@@ -16,6 +16,94 @@ function getToken() {
   return localStorage.getItem("auth_token");
 }
 
+function prettifyFieldName(field) {
+  const map = {
+    username: "用户名",
+    password: "密码",
+    email: "邮箱",
+    code: "验证码"
+  };
+  return map[field] || field || "";
+}
+
+function prettifyPydanticMsg(msg) {
+  // 这里只处理“字符串”消息；对象/数组由上层格式化函数处理，避免出现 [object Object]
+  if (msg == null) return "";
+  if (typeof msg !== "string") {
+    // 允许 number/bool 兜底成字符串；对象/数组返回空，让上层走结构化格式化
+    if (typeof msg === "number" || typeof msg === "boolean") return String(msg);
+    return "";
+  }
+  const m = msg;
+  // 常见 pydantic/fastapi 英文校验提示，尽量转成更自然的中文
+  // e.g. "String should have at least 6 characters"
+  const atLeast = m.match(/should have at least (\d+) characters?/i);
+  if (atLeast) return `至少 ${atLeast[1]} 位`;
+  const atMost = m.match(/should have at most (\d+) characters?/i);
+  if (atMost) return `最多 ${atMost[1]} 位`;
+  if (/field required/i.test(m)) return "必填";
+  if (/value is not a valid email address/i.test(m)) return "邮箱格式不正确";
+  return m;
+}
+
+function formatFastApiDetail(detail) {
+  if (!detail) return "";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map(item => {
+        if (!item) return "";
+        if (typeof item === "string") return item;
+        // 兼容 pydantic v2 的校验项：{ loc, msg, type, ... }
+        const loc = Array.isArray(item.loc) ? item.loc : [];
+        const field = loc.length ? loc[loc.length - 1] : "";
+        const prettyField = prettifyFieldName(field);
+
+        const msgRaw = item.msg ?? item.message ?? item.detail;
+        const prettyMsg =
+          prettifyPydanticMsg(msgRaw)
+          || formatFastApiDetail(msgRaw) // msgRaw 可能是对象/数组
+          || "";
+        return prettyField ? `${prettyField}${prettyMsg ? `：${prettyMsg}` : ""}` : (prettyMsg || "");
+      })
+      .filter(Boolean);
+    // 去重 + 合并
+    return Array.from(new Set(parts)).join("；");
+  }
+  if (typeof detail === "object") {
+    // 兼容 detail 为单个 pydantic 错误项（对象而非数组）
+    if (detail.loc && (detail.msg || detail.message || detail.detail)) {
+      const loc = Array.isArray(detail.loc) ? detail.loc : [];
+      const field = loc.length ? loc[loc.length - 1] : "";
+      const prettyField = prettifyFieldName(field);
+      const msgRaw = detail.msg ?? detail.message ?? detail.detail;
+      const prettyMsg =
+        prettifyPydanticMsg(msgRaw)
+        || formatFastApiDetail(msgRaw)
+        || "";
+      return prettyField ? `${prettyField}${prettyMsg ? `：${prettyMsg}` : ""}` : (prettyMsg || "");
+    }
+
+    // 兼容 detail 为 dict：{ password: "...", email: "..."} 或更深层嵌套
+    const entries = Object.entries(detail);
+    if (entries.length) {
+      const parts = entries
+        .map(([k, v]) => {
+          const prettyField = prettifyFieldName(k);
+          const msg = formatFastApiDetail(v) || prettifyPydanticMsg(v) || (v == null ? "" : String(v));
+          return prettyField ? `${prettyField}${msg ? `：${msg}` : ""}` : msg;
+        })
+        .filter(Boolean);
+      if (parts.length) return Array.from(new Set(parts)).join("；");
+    }
+
+    // 兜底：尝试提取常见字段
+    const msg = detail.msg ?? detail.message ?? detail.detail;
+    return formatFastApiDetail(msg) || prettifyPydanticMsg(msg) || JSON.stringify(detail);
+  }
+  return (detail || "").toString();
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const headers = {
@@ -39,7 +127,12 @@ async function request(path, options = {}) {
     let message = text;
     try {
       const data = JSON.parse(text || "{}");
-      message = data.message || data.error || data.detail || message;
+      // FastAPI 常见：{detail: ...}；也兼容 {message: ...}/{error: ...} 且它们可能是对象/数组
+      message =
+        formatFastApiDetail(data.detail)
+        || formatFastApiDetail(data.message)
+        || formatFastApiDetail(data.error)
+        || message;
     } catch {
       // ignore JSON parse errors, fall back to raw text
     }
