@@ -18,16 +18,15 @@
     <div class="work-actions">
       <button 
         class="action-btn" 
-        :class="item.status === 'published' ? 'action-disabled' : 'action-primary'"
+        :class="item.status === 'published' ? 'action-warning' : 'action-primary'"
         type="button" 
-        :disabled="item.status === 'published'"
         @click="$emit('publish', item)"
       >
         <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" v-if="item.status !== 'published'"/>
-          <path d="M20 6L9 17l-5-5" v-else/>
+          <path d="M18 6L6 18M6 6l12 12" v-else/>
         </svg>
-        <span>{{ item.status === 'published' ? '已发布' : '发布' }}</span>
+        <span>{{ item.status === 'published' ? '撤销发布' : '发布' }}</span>
       </button>
       <button class="action-btn action-text" type="button" @click="$emit('edit', item)">
         <span>修改名称</span>
@@ -235,6 +234,18 @@ const metaLine = computed(() => {
   border-color: rgba(80, 160, 255, 0.4);
   box-shadow: 0 0 12px rgba(80, 160, 255, 0.25);
   transform: translateY(-1px);
+}
+
+.action-warning {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
+.action-warning:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.22);
 }
 
 .action-btn:active {

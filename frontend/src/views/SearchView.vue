@@ -286,9 +286,69 @@ const gotoUser = id => {
   router.push({ name: "userPublic", params: { id } });
 };
 
-const downloadSong = song => {
-  // 占位：后端暂未提供下载 URL，此处预留
-  errorMessage.value = "暂未提供下载接口";
+const _guessExtFromUrl = (url) => {
+  if (!url) return "wav";
+  const m = String(url).match(/\.([a-zA-Z0-9]+)(\?|#|$)/);
+  const ext = (m?.[1] || "").toLowerCase();
+  // Whitelist common audio extensions
+  if (["wav", "mp3", "flac", "ogg", "m4a", "aac"].includes(ext)) return ext;
+  return "wav";
+};
+
+const _sanitizeFilename = (name) => {
+  const s = (name || "").toString().trim() || "music";
+  // Windows reserved chars: \ / : * ? " < > |
+  return s.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80) || "music";
+};
+
+const _triggerBrowserDownload = (href, filename) => {
+  const a = document.createElement("a");
+  a.href = href;
+  // NOTE: download attr may be ignored for cross-origin URLs in some browsers;
+  // we still set it when possible for better UX.
+  if (filename) a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+const downloadSong = async (song) => {
+  const url = (song?.url || "").trim();
+  if (!url) {
+    errorMessage.value = "暂无可下载的音频地址";
+    return;
+  }
+
+  errorMessage.value = "";
+  const ext = _guessExtFromUrl(url);
+  const baseName = _sanitizeFilename(song?.title || `song_${song?.id || ""}`);
+  const filename = `${baseName}.${ext}`;
+
+  // Preferred: fetch -> blob -> objectURL (ensures bytes correctness when CORS allows)
+  try {
+    const res = await fetch(url, { method: "GET" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    try {
+      _triggerBrowserDownload(blobUrl, filename);
+    } finally {
+      // Give the browser a moment to start the download before revoking
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+    }
+    return;
+  } catch (err) {
+    // Fallback: direct URL (works for OSS signed URLs / cross-origin without CORS)
+    try {
+      _triggerBrowserDownload(url, filename);
+      return;
+    } catch {
+      // ignore and show error below
+    }
+    errorMessage.value = `下载失败：${err?.message || "请稍后重试"}`;
+  }
 };
 
 watch(

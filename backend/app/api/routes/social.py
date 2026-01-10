@@ -319,6 +319,20 @@ async def get_public_user(
       .all()
   )
 
+  # If viewer is logged in, compute which of the returned works are liked by the viewer.
+  # IMPORTANT: do this in ONE query to avoid N+1.
+  liked_work_ids: set[int] = set()
+  if current_user and works:
+    rows = (
+        db.query(LikeRecord.work_id)
+        .filter(
+            LikeRecord.user_id == current_user.id,
+            LikeRecord.work_id.in_([w.id for w in works]),
+        )
+        .all()
+    )
+    liked_work_ids = {row[0] for row in rows}
+
   liked_songs: list[WorkPublicResponse] = []
   if current_user and current_user.id == user.id:
     liked = (
@@ -360,6 +374,6 @@ async def get_public_user(
 
   return PublicUserProfile(
       user=profile,
-      works=[_to_public_work(w, liked=False) for w in works],
+      works=[_to_public_work(w, liked=(w.id in liked_work_ids)) for w in works],
       liked_songs=liked_songs,
   )

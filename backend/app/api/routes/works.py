@@ -254,7 +254,7 @@ async def delete_work(
     current_user: User = Depends(get_current_user),
 ) -> None:
   import os
-  
+
   work = (
       db.query(Work)
       .filter(Work.id == work_id, Work.user_id == current_user.id)
@@ -265,54 +265,58 @@ async def delete_work(
 
   was_public_published = _is_public_published(work)
 
-  # 删除封面文件
+  # IMPORTANT:
+  # - Do NOT delete OSS/local files before DB commit. If DB deletion fails (e.g. FK constraints),
+  #   we would create broken works that still exist in DB but point to missing OSS objects (404).
+  # - Capture deletion targets first; execute DB delete+commit; then best-effort delete files.
+  cover_oss_key: str | None = None
+  cover_local_path: Path | None = None
+  audio_oss_key: str | None = None
+  audio_local_path: Path | None = None
+
+  # Capture cover deletion target
   if work.cover_url:
     try:
-      oss_key = decode_oss_path(work.cover_url)
-      if oss_key and settings.OSS_ENABLED:
-        OSSStorage().delete(oss_key)
-      else:
+      cover_oss_key = decode_oss_path(work.cover_url) if settings.OSS_ENABLED else None
+      if not cover_oss_key:
         # cover_url 格式如 "/static/covers/xxx.png" 或 "static/covers/xxx.png"
         cover_path = work.cover_url.lstrip("/")
         if cover_path.startswith("static/covers/"):
-          # 只提取文件名，防止路径穿越
           filename = Path(cover_path).name
           covers_dir = Path(settings.STATIC_ROOT) / "covers"
-          full_cover_path = covers_dir / filename
-          # 安全检查：确保解析后的路径在 covers 目录下
-          if full_cover_path.exists() and full_cover_path.is_file():
-            resolved_path = full_cover_path.resolve()
+          candidate = covers_dir / filename
+          try:
+            resolved_path = candidate.resolve()
             resolved_dir = covers_dir.resolve()
             if str(resolved_path).startswith(str(resolved_dir)):
-              os.remove(full_cover_path)
-    except Exception as e:
-      # 删除文件失败不影响数据库删除，只记录日志
-      print(f"[delete_work] Failed to delete cover file: {e}")
+              cover_local_path = candidate
+          except Exception:
+            cover_local_path = None
+    except Exception:
+      cover_oss_key = None
+      cover_local_path = None
 
-  # 删除音频文件（通过 music_file）
+  # Capture audio deletion target (via music_file)
   music_file = db.query(MusicFile).filter(MusicFile.id == work.music_file_id).first()
   if music_file:
     try:
-      oss_key = decode_oss_path(music_file.storage_path)
-      if oss_key and settings.OSS_ENABLED:
-        OSSStorage().delete(oss_key)
-      else:
-        # 音频文件存储在 static/audio/ 目录下
+      audio_oss_key = decode_oss_path(music_file.storage_path) if settings.OSS_ENABLED else None
+      if not audio_oss_key:
         audio_filename = music_file.file_name
         if audio_filename:
-          # 只使用文件名，防止路径穿越
           filename = Path(audio_filename).name
           audio_dir = Path(settings.STATIC_ROOT) / "audio"
-          audio_path = audio_dir / filename
-          # 安全检查：确保解析后的路径在 audio 目录下
-          if audio_path.exists() and audio_path.is_file():
-            resolved_path = audio_path.resolve()
+          candidate = audio_dir / filename
+          try:
+            resolved_path = candidate.resolve()
             resolved_dir = audio_dir.resolve()
             if str(resolved_path).startswith(str(resolved_dir)):
-              os.remove(audio_path)
-    except Exception as e:
-      # 删除文件失败不影响数据库删除，只记录日志
-      print(f"[delete_work] Failed to delete audio file: {e}")
+              audio_local_path = candidate
+          except Exception:
+            audio_local_path = None
+    except Exception:
+      audio_oss_key = None
+      audio_local_path = None
 
   db.delete(work)
 
@@ -320,7 +324,37 @@ async def delete_work(
     current_user.total_works = max((current_user.total_works or 0) - 1, 0)
     db.add(current_user)
 
-  db.commit()
+  try:
+    db.commit()
+  except Exception as exc:
+    db.rollback()
+    print(f"[delete_work] DB commit failed (work_id={work_id}): {exc}")
+    raise HTTPException(status_code=500, detail="删除失败：数据库写入错误，请稍后重试") from exc
+
+  # Best-effort delete files AFTER commit
+  if cover_oss_key and settings.OSS_ENABLED:
+    try:
+      OSSStorage().delete(cover_oss_key)
+    except Exception as e:
+      print(f"[delete_work] Failed to delete cover from OSS: {e}")
+  if cover_local_path:
+    try:
+      if cover_local_path.exists() and cover_local_path.is_file():
+        os.remove(cover_local_path)
+    except Exception as e:
+      print(f"[delete_work] Failed to delete cover file: {e}")
+
+  if audio_oss_key and settings.OSS_ENABLED:
+    try:
+      OSSStorage().delete(audio_oss_key)
+    except Exception as e:
+      print(f"[delete_work] Failed to delete audio from OSS: {e}")
+  if audio_local_path:
+    try:
+      if audio_local_path.exists() and audio_local_path.is_file():
+        os.remove(audio_local_path)
+    except Exception as e:
+      print(f"[delete_work] Failed to delete audio file: {e}")
 
 
 @router.get(

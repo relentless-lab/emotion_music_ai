@@ -134,8 +134,10 @@
           :song="work"
           :cover="work.cover"
           :play-count="work.play_count"
+          :liked="isWorkLiked(work)"
           :show-actions="true"
           @play="playWork(work)"
+          @like="toggleLike(work)"
           @card-click="goToWorkDetail(work.id)"
           @more="handleWorkMore"
         />
@@ -253,14 +255,16 @@
 import { computed, reactive, ref, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { useUiStore } from "@/stores/ui";
 import { fetchWorks, updateWork, uploadWorkCover } from "@/services/workApi";
 import { toAbsoluteUrl } from "@/utils/url";
 import { usePlayerStore } from "@/stores/player";
-import { fetchFollowers, fetchFollowing, fetchLikedWorks } from "@/services/searchApi";
+import { fetchFollowers, fetchFollowing, fetchLikedWorks, likeWork, unlikeWork } from "@/services/searchApi";
 import SongImageCard from "@/views/components/SongImageCard.vue";
 import { uploadAvatar } from "@/services/authApi";
 
 const auth = useAuthStore();
+const ui = useUiStore();
 const player = usePlayerStore();
 const router = useRouter();
 const isLoggedIn = computed(() => auth.isLoggedIn);
@@ -289,6 +293,78 @@ const likedWorks = ref([]);
 const loadingLikes = ref(false);
 const likesError = ref("");
 
+// Track liked work ids so the heart icon can reflect likes done in other pages.
+// Source of truth: /api/social/likes/works (fetchLikedWorks).
+const likedIds = ref(new Set());
+watch(
+  likedWorks,
+  (list) => {
+    const ids = Array.isArray(list) ? list.map((w) => w?.id).filter(Boolean) : [];
+    likedIds.value = new Set(ids);
+  },
+  { immediate: true }
+);
+
+const likeLoadingId = ref(null);
+
+const ensureLogin = () => {
+  if (isLoggedIn.value) return true;
+  triggerToast("请先登录后再操作", "error");
+  ui.openLoginPanel();
+  return false;
+};
+
+const isWorkLiked = (work) => {
+  const id = work?.id;
+  if (!id) return false;
+  return likedIds.value.has(id);
+};
+
+const toggleLike = async (work) => {
+  if (!ensureLogin() || !work?.id) return;
+  if (likeLoadingId.value === work.id) return;
+
+  // Backend rule: only public + published works can be liked.
+  if ((work.visibility || "").toString() && work.visibility !== "public") {
+    triggerToast("作品需设为公开才可点赞", "error");
+    return;
+  }
+  if ((work.status || "").toString() && work.status !== "published") {
+    triggerToast("作品需发布后才可点赞", "error");
+    return;
+  }
+
+  likeLoadingId.value = work.id;
+  const wasLiked = isWorkLiked(work);
+  try {
+    if (wasLiked) {
+      await unlikeWork(work.id);
+      // optimistic UI
+      work.like_count = Math.max((work.like_count || 0) - 1, 0);
+      work.liked = false;
+      const next = new Set(likedIds.value);
+      next.delete(work.id);
+      likedIds.value = next;
+      triggerToast("已取消点赞", "success");
+    } else {
+      await likeWork(work.id);
+      // optimistic UI
+      work.like_count = (work.like_count || 0) + 1;
+      work.liked = true;
+      likedIds.value = new Set([...likedIds.value, work.id]);
+      triggerToast("点赞成功", "success");
+    }
+
+    // Best-effort: refresh dependent UI sections (stats + liked list)
+    await auth.refreshProfile();
+    await loadLikedWorks();
+  } catch (err) {
+    triggerToast(err?.message || "操作失败", "error");
+  } finally {
+    likeLoadingId.value = null;
+  }
+};
+
 const listModal = reactive({
   open: false,
   type: "",
@@ -305,13 +381,24 @@ const sampleCovers = [
 const statusText = computed(() => auth.user?.status || "已激活");
 const userStats = computed(() => auth.user?.stats || {});
 
+const totalPublishedPlays = computed(() => {
+  // “总播放量”：仅统计已发布作品（status=published）的累计播放次数求和
+  // 数据来自 /api/works?status=published 返回的 work.play_count（由 /api/works/{id}/play 累加）
+  const list = Array.isArray(publishedWorks.value) ? publishedWorks.value : [];
+  return list.reduce((sum, w) => {
+    const v = Number(w?.play_count ?? w?.playCount ?? 0) || 0;
+    return sum + v;
+  }, 0);
+});
+
 const statItems = computed(() => {
   const stats = userStats.value;
   return [
     { label: "总生成次数", value: stats.generations ?? 0 },
     { label: "情绪识别次数", value: stats.emotionDetections ?? 0 },
     { label: "总点赞数", value: stats.likesReceived ?? 0 },
-    { label: "本月播放", value: stats.playsThisMonth ?? 0 }
+    // 需求：个人资料页把“本月播放”改为“总播放量”（仅已发布作品求和）
+    { label: "总播放量", value: totalPublishedPlays.value ?? 0 }
   ];
 });
 
@@ -1327,6 +1414,10 @@ h1 {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.45);
+  /* 固定弹窗整体大小（随 viewport 自适应上限），避免随着列表项数量无限变高 */
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -1345,8 +1436,12 @@ h1 {
   font-size: 18px;
 }
 
-.modal-body {
+/* 仅约束“粉丝/关注/喜欢”列表弹窗：其它弹窗（如作品编辑）不受影响 */
+.list-modal .modal-body {
   padding: 14px 16px;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-list {

@@ -215,6 +215,25 @@ const actionLabel = computed(() => (modalMode.value === "rename" ? "保存" : sa
 const showPublishFields = computed(() => modalMode.value === "publish");
 
 const openPublishModal = item => {
+  // 已发布：改为“撤销发布”（不弹窗）
+  if (item?.status === "published") {
+    (async () => {
+      if (!confirm(`确定要撤销发布「${item.title || item.name || "未命名"}」吗？撤销后将不会出现在首页/搜索结果中。`)) {
+        return;
+      }
+      try {
+        await worksStore.editWork(item.id, {
+          status: "draft",
+          visibility: "private"
+        });
+        showToast("已撤销发布");
+      } catch (err) {
+        showToast(err?.message || "撤销发布失败", "error");
+      }
+    })();
+    return;
+  }
+
   modalMode.value = "publish";
   currentId.value = item.id;
   form.title = item.title || item.name || "";
