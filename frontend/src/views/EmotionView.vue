@@ -5,9 +5,22 @@
     <section class="panel upload-panel">
       <!-- 上传控件：仅在非历史模式下展示 -->
       <div class="controls" v-if="!historyMode">
-        <input ref="fileInput" type="file" accept="audio/*" @change="onFileChange" />
-        <button class="btn" :disabled="!selectedFile || isAnalyzing" @click="onAnalyze">
-          {{ isAnalyzing ? "分析中..." : "上传并分析" }}
+        <div class="file-upload-wrapper">
+          <button class="primary-btn" type="button" @click="$refs.fileInput.click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            <span>选择文件</span>
+          </button>
+          <input ref="fileInput" type="file" accept="audio/*" @change="onFileChange" style="display: none" />
+          <span class="file-name" v-if="selectedFile">{{ selectedFile.name }}</span>
+        </div>
+        <button class="primary-btn analysis-btn" :disabled="!selectedFile || isAnalyzing" @click="onAnalyze">
+          <span v-if="!isAnalyzing">上传并分析</span>
+          <template v-else>
+            <span class="loading-spinner--small"></span>
+            <span>分析中...</span>
+          </template>
         </button>
       </div>
 
@@ -1810,6 +1823,71 @@ h1 {
   margin-bottom: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.file-upload-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-name {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary-btn {
+  padding: 0 16px;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.analysis-btn {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+}
+
+.loading-spinner--small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .upload-panel {

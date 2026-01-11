@@ -9,8 +9,11 @@
             <h2>{{ displayTitle ? `「${displayTitle}」` : "音乐创作对话" }}</h2>
           </div>
           <div class="dialogue-meta">
-            <button class="ghost-btn small" type="button" @click="resetDialogue" :disabled="sending">
-              新建对话
+            <button class="new-chat-btn" type="button" @click="resetDialogue" :disabled="sending">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                <path d="M12 5v12M5 12h14" />
+              </svg>
+              <span>新建对话</span>
             </button>
           </div>
         </header>
@@ -186,7 +189,7 @@ import {
   getMusicTaskStatus,
   imitateMusicAsync
 } from "@/services/dialogueApi";
-import { createWork } from "@/services/workApi";
+import { createWork, fetchWorks } from "@/services/workApi";
 import { usePlayerStore } from "@/stores/player";
 import GenerateMusicSidebar from "./components/GenerateMusicSidebar.vue";
 
@@ -205,7 +208,9 @@ const DEFAULT_DURATION_SECONDS = 120;
 const isInstrumental = ref(true);
 const lyricsInput = ref("");
 const addingWorkId = ref(null);
-const addedWorkIds = ref(new Set()); // 跟踪已保存的作品ID
+// Track which music_file_id has been saved into Works (for "已添加到本地作品" UI).
+// NOTE: This is derived from server-side works; we still keep a local Set for instant UI feedback.
+const addedWorkIds = ref(new Set());
 const toastMessage = ref("");
 const toastType = ref("success");
 let toastTimer = null;
@@ -445,6 +450,29 @@ const restoreSessionFromStorage = () => {
   }
 };
 
+const syncAddedWorkIdsFromServer = async () => {
+  try {
+    if (!auth?.isLoggedIn) {
+      addedWorkIds.value = new Set();
+      return;
+    }
+    const works = await fetchWorks();
+    const next = new Set();
+    (Array.isArray(works) ? works : []).forEach(w => {
+      const musicFileId = w?.music_file_id ?? w?.musicFileId ?? w?.music_fileId;
+      // Normalize to string so Set membership is stable across refresh/localStorage serialization
+      // (e.g. "123" vs 123 would otherwise fail `.has()` checks).
+      if (musicFileId !== undefined && musicFileId !== null && musicFileId !== "") {
+        next.add(String(musicFileId));
+      }
+    });
+    addedWorkIds.value = next;
+  } catch (e) {
+    // Best-effort. If this fails, the button falls back to "添加到本地作品" but clicking still works.
+    console.warn("syncAddedWorkIdsFromServer failed:", e);
+  }
+};
+
 const resetSessionState = () => {
   bumpSessionNonce();
   // 清理生成中的轮询（避免账号切换后继续轮询旧任务）
@@ -471,6 +499,8 @@ watch(
     if (route.query.dialogueId) return;
     const restored = restoreSessionFromStorage();
     if (restored) scrollToBottom();
+    // Re-sync saved state for "added to works" button after account switch.
+    syncAddedWorkIdsFromServer();
   }
 );
 
@@ -562,6 +592,9 @@ onMounted(async () => {
       scrollToBottom();
     }
   }
+
+  // Sync "已添加到本地作品" state from server so it persists across refresh.
+  await syncAddedWorkIdsFromServer();
   
 });
 
@@ -1053,7 +1086,8 @@ const playMusicFromSidebar = track => {
 
 const addToWorks = async track => {
   if (!track) return;
-  const musicFileId = track.music_file_id || track.id;
+  const rawId = track.music_file_id || track.id;
+  const musicFileId = rawId !== undefined && rawId !== null ? String(rawId) : null;
   if (!musicFileId) {
     error.value = "找不到音乐文件ID，无法保存作品";
     return;
@@ -1066,13 +1100,16 @@ const addToWorks = async track => {
   error.value = "";
   try {
     await createWork({
-      music_file_id: musicFileId,
+      music_file_id: rawId,
       title: track.title || track.mood || "AI 生成作品",
       description: "", // 保持描述为空，除非用户之后手动编辑发布
       mood: track.prompt || track.mood || "", // 将生成需求（Prompt）存储在 mood 字段中
       cover_url: track.cover || null,
     });
-    addedWorkIds.value.add(musicFileId);
+    // Ensure a new Set reference so Vue updates reliably.
+    const next = new Set(addedWorkIds.value);
+    next.add(musicFileId);
+    addedWorkIds.value = next;
     showToast("已加入本地作品");
   } catch (err) {
     error.value = err?.message || "添加到作品失败";
@@ -1243,6 +1280,72 @@ const addToWorks = async track => {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.new-chat-btn {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.new-chat-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.new-chat-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.primary-btn {
+  padding: 0 16px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.primary-btn:active {
+  transform: translateY(0);
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.primary-btn.small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 
 .mode-chip {

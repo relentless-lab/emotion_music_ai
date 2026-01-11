@@ -46,9 +46,18 @@
               </select>
             </label>
             <label class="field">
-              <span>封面图片</span>
-              <input type="file" accept="image/*" @change="onCoverChange" />
-              <div v-if="previewUrl" class="cover-preview">
+            <span>封面图片</span>
+            <div class="file-upload-wrapper">
+              <button class="primary-btn small upload-btn" type="button" @click="$el.querySelector('.hidden-file-input').click()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                </svg>
+                <span>选择文件</span>
+              </button>
+              <input type="file" class="hidden-file-input" accept="image/*" @change="onCoverChange" style="display: none" />
+              <span class="file-name" v-if="form.cover_url">已上传封面</span>
+            </div>
+            <div v-if="previewUrl" class="cover-preview">
                 <img :src="previewUrl" alt="封面预览" />
               </div>
             </label>
@@ -397,6 +406,18 @@ const submitPublish = async () => {
   color: #e5e7eb;
 }
 
+.file-upload-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.file-name {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .cover-preview {
   margin-top: 8px;
   width: 220px;
@@ -430,20 +451,60 @@ const submitPublish = async () => {
   font-size: 16px;
 }
 
-.ghost-btn,
 .primary-btn {
-  height: 34px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.primary-btn.small {
+  height: 32px;
   padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.upload-btn {
+  background: #3b82f6;
+}
+
+.ghost-btn {
+  height: 38px;
+  padding: 0 16px;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(255, 255, 255, 0.04);
   color: #e5e7eb;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.primary-btn {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  border: none;
+.ghost-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(148, 163, 184, 0.5);
 }
 
 .error {
