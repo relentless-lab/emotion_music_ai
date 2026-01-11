@@ -41,9 +41,6 @@
       </div>
       <div class="danger-actions">
         <button class="warn-btn" type="button" @click="handleLogout">退出登录</button>
-        <button class="danger-btn" type="button" @click="handleDelete" :disabled="deleting">
-          {{ deleting ? "删除中..." : "删除账户" }}
-        </button>
       </div>
     </section>
   </div>
@@ -57,7 +54,6 @@ import { changePassword } from "@/services/authApi";
 
 const auth = useAuthStore();
 const router = useRouter();
-const deleting = ref(false);
 
 const savingSecurity = ref(false);
 const securityError = ref("");
@@ -114,21 +110,6 @@ const handleChangePassword = async () => {
   }
 };
 
-const handleDelete = async () => {
-  if (deleting.value) return;
-  const confirmed = window.confirm("确定要删除账户吗？此操作不可撤销（演示环境将清空本地登录状态）");
-  if (!confirmed) return;
-  deleting.value = true;
-  try {
-    await auth.deleteAccountAction();
-    router.push("/");
-    window.alert("账户已删除（本地登录信息已清理）");
-  } catch (err) {
-    window.alert(err?.message || "删除失败");
-  } finally {
-    deleting.value = false;
-  }
-};
 </script>
 
 <style scoped>
