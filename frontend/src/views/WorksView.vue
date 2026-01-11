@@ -35,7 +35,13 @@
           <template v-if="showPublishFields">
             <label class="field">
               <span>描述</span>
-              <textarea v-model="form.description" rows="3" placeholder="创作初衷、情绪等"></textarea>
+              <textarea
+                v-model="form.description"
+                :maxlength="MAX_WORK_DESC_LEN"
+                rows="3"
+                placeholder="创作初衷、情绪等（最多 30 字）"
+                class="desc-textarea"
+              ></textarea>
             </label>
             <label class="field">
             <span>封面图片</span>
@@ -83,6 +89,7 @@ import { uploadWorkCover } from "@/services/workApi";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const MAX_WORK_TITLE_LEN = 30;
+const MAX_WORK_DESC_LEN = 30;
 
 const worksStore = useWorksStore();
 const playerStore = usePlayerStore();
@@ -285,6 +292,10 @@ const submitPublish = async () => {
     error.value = `作品名称最多 ${MAX_WORK_TITLE_LEN} 字`;
     return;
   }
+  if ((form.description || "").trim().length > MAX_WORK_DESC_LEN) {
+    error.value = `作品描述最多 ${MAX_WORK_DESC_LEN} 字`;
+    return;
+  }
   saving.value = true;
   error.value = "";
   try {
@@ -398,6 +409,10 @@ const submitPublish = async () => {
   border: 1px solid rgba(148, 163, 184, 0.3);
   background: rgba(255, 255, 255, 0.04);
   color: #e5e7eb;
+}
+
+.desc-textarea {
+  resize: none; /* prevent drag-resize handle */
 }
 
 .file-upload-wrapper {

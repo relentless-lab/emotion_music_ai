@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_current_user, get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.config import settings
+from app.models.like_record import LikeRecord
 from app.models.user import User
+from app.models.work import Work, WorkStatus, WorkVisibility
 from app.schemas.auth import (
     ChangePasswordRequest,
     LoginRequest,
@@ -23,6 +25,28 @@ from app.services.url_resolver import resolve_cover_url
 from app.services.oss_storage import OSSStorage, build_oss_key, encode_oss_path
 
 router = APIRouter()
+
+
+def _count_visible_liked_works(db: Session, *, user_id: int) -> int:
+  """
+  Count liked works that are still visible in the "liked works" list.
+
+  NOTE:
+  - `users.liked_works_count` is an accumulated counter.
+  - Liked works list endpoint filters to published + public works.
+  - When a liked work is later unpublished/private, the list shrinks but the counter doesn't,
+    which makes Profile "喜欢" count inconsistent with the list modal.
+  """
+  return (
+      db.query(LikeRecord)
+      .join(Work, Work.id == LikeRecord.work_id)
+      .filter(
+          LikeRecord.user_id == user_id,
+          Work.status == WorkStatus.published,
+          Work.visibility == WorkVisibility.public,
+      )
+      .count()
+  )
 
 
 @router.post("/send-verification-code", summary="send verification code to email")
@@ -137,7 +161,11 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenRe
 
 
 @router.get("/profile", response_model=ProfileResponse, summary="get current user profile")
-async def profile(current_user: User = Depends(get_current_user)) -> ProfileResponse:
+async def profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProfileResponse:
+  liked_visible_count = _count_visible_liked_works(db, user_id=current_user.id)
   return ProfileResponse(
       id=current_user.id,
       name=current_user.username,
@@ -153,7 +181,7 @@ async def profile(current_user: User = Depends(get_current_user)) -> ProfileResp
           "playsThisMonth": current_user.plays_this_month,
           "followers": current_user.followers_count,
           "following": current_user.following_count,
-          "likedSongs": current_user.liked_works_count,
+          "likedSongs": liked_visible_count,
           "works": current_user.total_works,
       },
   )
@@ -182,6 +210,7 @@ async def update_profile(
   db.commit()
   db.refresh(current_user)
 
+  liked_visible_count = _count_visible_liked_works(db, user_id=current_user.id)
   return ProfileResponse(
       id=current_user.id,
       name=current_user.username,
@@ -197,7 +226,7 @@ async def update_profile(
           "playsThisMonth": current_user.plays_this_month,
           "followers": current_user.followers_count,
           "following": current_user.following_count,
-          "likedSongs": current_user.liked_works_count,
+          "likedSongs": liked_visible_count,
           "works": current_user.total_works,
       },
   )

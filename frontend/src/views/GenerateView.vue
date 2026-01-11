@@ -49,7 +49,7 @@
             <div class="textarea-container">
               <textarea
                 v-model="messageInput"
-                :disabled="sending"
+                :disabled="isGenerationLocked"
                 @keydown.enter.exact.prevent="sendMessage"
                 @keydown.shift.enter.exact.prevent="messageInput += '\n'"
               placeholder="例如：在雨夜街头的慢板爵士，带点复古氛围和萨克斯..."
@@ -62,7 +62,7 @@
                 class="mode-chip"
                 type="button"
                 :class="{ active: isInstrumental }"
-                :disabled="sending"
+                :disabled="isGenerationLocked"
                 @click="isInstrumental = true"
               >
                 纯音乐
@@ -71,7 +71,7 @@
                 class="mode-chip"
                 type="button"
                 :class="{ active: !isInstrumental }"
-                :disabled="sending"
+                :disabled="isGenerationLocked"
                 @click="isInstrumental = false"
               >
                 有人声 / 歌曲
@@ -80,7 +80,7 @@
               <button
                 class="mode-chip imitate-chip"
                 type="button"
-                :disabled="sending"
+                :disabled="isGenerationLocked"
                 @click="triggerImitatePick"
                 title="请点击上传参考音频"
               >
@@ -112,7 +112,7 @@
               <button
                 class="send-btn"
                 type="button"
-                :disabled="sending || !messageInput.trim()"
+                :disabled="isGenerationLocked || !messageInput.trim()"
                 @click="sendMessage"
                 :class="{ loading: sending }"
               >
@@ -215,6 +215,14 @@ const toastMessage = ref("");
 const toastType = ref("success");
 let toastTimer = null;
 const imitateFileInputRef = ref(null);
+
+// `sending` only covers the request; generation itself continues via polling.
+// Lock further generation requests until all tracks are out of "generating".
+const isGenerationLocked = computed(() => {
+  if (sending.value) return true;
+  const list = Array.isArray(generatedTracks.value) ? generatedTracks.value : [];
+  return list.some(t => t?.status === "generating");
+});
 
 // Prevent race conditions when users start a new conversation while an async generation request is in-flight.
 // Late responses from previous conversations must not overwrite the current dialogueId/UI.
@@ -846,6 +854,10 @@ const normalizeResponse = payload => {
 };
 
 const sendMessage = async () => {
+  if (isGenerationLocked.value) {
+    showToast("正在生成音乐，请等待当前生成完成后再继续。", "error");
+    return;
+  }
   const requestNonce = sessionNonce.value;
   const text = messageInput.value.trim();
   if (!text) {
@@ -993,7 +1005,7 @@ const sendMessage = async () => {
 };
 
 const triggerImitatePick = () => {
-  if (sending.value) return;
+  if (isGenerationLocked.value) return;
   if (imitateFileInputRef.value) {
     imitateFileInputRef.value.value = ""; // allow picking same file again
     imitateFileInputRef.value.click();
