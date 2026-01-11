@@ -1476,7 +1476,26 @@ h1 {
   padding: 14px 16px;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden; /* 移除横向滚动条 */
   overscroll-behavior: contain;
+}
+
+/* 自定义列表弹窗滚动条：更细、深蓝色 */
+.list-modal .modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.list-modal .modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.list-modal .modal-body::-webkit-scrollbar-thumb {
+  background: #1e40af; /* 深蓝色 */
+  border-radius: 10px;
+}
+
+.list-modal .modal-body::-webkit-scrollbar-thumb:hover {
+  background: #2563eb;
 }
 
 .modal-list {
@@ -1493,6 +1512,7 @@ h1 {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  min-width: 0; /* 确保 grid 子元素可以收缩以触发 ellipsis */
 }
 
 .avatar-sm {
@@ -1514,8 +1534,20 @@ h1 {
   background-position: center;
 }
 
+.list-text {
+  min-width: 0; /* 允许 flex/grid 内容收缩 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .list-text .title {
   font-weight: 700;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* 文字过长显示省略号 */
+  margin-bottom: 4px;
 }
 
 .list-text .meta {
