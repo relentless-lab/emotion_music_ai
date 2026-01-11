@@ -38,14 +38,6 @@
               <textarea v-model="form.description" rows="3" placeholder="创作初衷、情绪等"></textarea>
             </label>
             <label class="field">
-              <span>可见性</span>
-              <select v-model="form.visibility">
-                <option value="public">公开</option>
-                <option value="unlisted">不公开链接</option>
-                <option value="private">仅自己</option>
-              </select>
-            </label>
-            <label class="field">
             <span>封面图片</span>
             <div class="file-upload-wrapper">
               <button class="primary-btn small upload-btn" type="button" @click="$el.querySelector('.hidden-file-input').click()">
@@ -198,6 +190,8 @@ const modalMode = ref("publish"); // publish | rename
 const form = reactive({
   title: "",
   description: "",
+  // NOTE: UI no longer exposes visibility selection. Publishing always uses "public";
+  // users can "撤销发布" to hide the work.
   visibility: "public",
   cover_url: ""
 });
@@ -247,7 +241,7 @@ const openPublishModal = item => {
   currentId.value = item.id;
   form.title = item.title || item.name || "";
   form.description = item.description || "";
-  form.visibility = item.visibility || "public";
+  form.visibility = "public";
   form.cover_url = item.cover_url || "";
   error.value = "";
   showModal.value = true;
@@ -258,7 +252,7 @@ const openEditModal = item => {
   currentId.value = item.id;
   form.title = item.title || item.name || "";
   form.description = item.description || "";
-  form.visibility = item.visibility || "public";
+  form.visibility = "public";
   form.cover_url = item.cover_url || "";
   error.value = "";
   showModal.value = true;
@@ -300,7 +294,7 @@ const submitPublish = async () => {
       await worksStore.editWork(currentId.value, {
         title: form.title,
         description: form.description,
-        visibility: form.visibility,
+        visibility: "public",
         cover_url: form.cover_url || null, // 明确传递 cover_url
         status: "published"
       });
